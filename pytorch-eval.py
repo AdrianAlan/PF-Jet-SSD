@@ -155,7 +155,7 @@ if __name__ == '__main__':
 
     for i in range(len(jet_classes)):
         plot_name = './models/precision-recall-full-%s.png' % jet_classes[i]
-        ap, it = test_net(net, train_loader, top_k=10, im_size=(300, 300),
+        ap, it = test_net(net, train_loader, top_k=10, im_size=(360, 340),
                           conf_threshold=0.01, overlap_threshold=0.5,
                           plot_name=plot_name, jet_class=i)
         print('Average precision for class {0}: {1:.2f}'.format(i, ap))
