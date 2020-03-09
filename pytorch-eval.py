@@ -17,7 +17,8 @@ from utils import Plotting
 
 
 def test_net(model, dataset, top_k, im_size=(300, 300),
-             conf_threshold=0.05, overlap_threshold=0.1, plot_name=None):
+             conf_threshold=0.05, overlap_threshold=0.1, plot_name=None,
+             jet_class=0):
 
     if plot_name:
         plot = Plotting(save_path=plot_name)
@@ -30,20 +31,21 @@ def test_net(model, dataset, top_k, im_size=(300, 300),
         progress_bar = tqdm(total=len(dataset), desc='Evaluating events')
 
         for data, targets in dataset:
-            data = data.cuda()
-
-            t_start = time()
-
-            detections = model(data).data
-
-            t_end = time()
-            inf_time.append(t_end-t_start)
-
             targets = targets[0].cpu().numpy()
+            if np.unique(targets[:, 4])[0] != jet_class:
+                progress_bar.update(1)
+                continue
+
             targets[:, 0] *= im_size[0]
             targets[:, 2] *= im_size[0]
             targets[:, 1] *= im_size[1]
             targets[:, 3] *= im_size[1]
+
+            data = data.cuda()
+            t_start = time()
+            detections = model(data).data
+            t_end = time()
+            inf_time.append(t_end-t_start)
 
             all_detections = np.empty((0, 7))
             for j in range(1, detections.size(1)):
@@ -132,10 +134,10 @@ if __name__ == '__main__':
         torch.set_default_tensor_type('torch.FloatTensor')
 
     model_source_path = './models/ssd-jet-tests.pth'
-    plot_name = './models/precision-recall.png'
 
     num_classes = 1
     num_classes = num_classes + 1  # +1 for background
+    jet_classes = ['b', 'h', 'W', 't']
 
     net = build_ssd('test', 300, num_classes, False)
     net.load_weights(model_source_path)
@@ -151,9 +153,10 @@ if __name__ == '__main__':
                                                shuffle=False,
                                                num_workers=1)
 
-    for i in range(1, num_classes):
+    for i in range(len(jet_classes)):
+        plot_name = './models/precision-recall-full-%s.png' % jet_classes[i]
         ap, it = test_net(net, train_loader, top_k=10, im_size=(300, 300),
                           conf_threshold=0.01, overlap_threshold=0.5,
-                          plot_name=plot_name)
+                          plot_name=plot_name, jet_class=i)
         print('Average precision for class {0}: {1:.2f}'.format(i, ap))
         print('Average inference time for class {0}: {1:.2f} ms'.format(i, it))
