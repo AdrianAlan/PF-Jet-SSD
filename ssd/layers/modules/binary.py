@@ -32,6 +32,9 @@ class BinaryConv2d(nn.Conv2d):
 
     def forward(self, input):
 
+        if input.size(1) != 2:
+            input.data = Binarize(input.data)
+
         if not hasattr(self.weight, 'org'):
             self.weight.org = self.weight.data.clone()
 
@@ -40,12 +43,12 @@ class BinaryConv2d(nn.Conv2d):
         out = nn.functional.conv2d(input, self.weight, None, self.stride,
                                    self.padding, self.dilation, self.groups)
 
-        self.bias.org = self.bias.data.clone()
-        out += self.bias.view(1, -1, 1, 1).expand_as(out)
+        if self.bias is not None:
+            self.bias.org = self.bias.data.clone()
+            out += self.bias.view(1, -1, 1, 1).expand_as(out)
 
         return out
 
 
 def Binarize(tensor):
-    t = tensor.add_(1).div_(2).add_(torch.rand(tensor.size()).add(-0.5))
-    return t.clamp_(0, 1).round().mul_(2).add_(-1)
+    return tensor.sign()
