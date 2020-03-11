@@ -222,10 +222,10 @@ def build_ssd(phase, size=300, num_classes=21, binary=True):
 
     if binary:
         conv = BinaryConv2d
-        acti = nn.Hardtanh(inplace=True)
     else:
         conv = nn.Conv2d
-        acti = nn.ReLU(inplace=True)
+
+    acti = nn.ReLU(inplace=True)
 
     base_, extras_, head_ = multibox(vgg(base[str(size)], 2, conv, acti),
                                      add_extras(extras[str(size)],
