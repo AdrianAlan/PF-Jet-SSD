@@ -31,11 +31,11 @@ class SSD(nn.Module):
         self.num_classes = num_classes
 
         jet = {'num_classes': 2,
-               'feature_maps_eta': [43, 21, 11, 6, 4, 2],
-               'feature_maps_phi': [45, 22, 11, 6, 4, 2],
                'min_dim': (360, 340),
-               'steps_eta': [8, 17, 31, 57, 85, 170],
-               'steps_phi': [8, 17, 33, 60, 90, 180],
+               'feature_maps_phi': [46, 22, 22, 22, 20, 18],
+               'feature_maps_eta': [44, 21, 21, 21, 19, 17],
+               'steps_phi': [8, 17, 17, 17, 18, 20],
+               'steps_eta': [8, 17, 17, 17, 18, 20],
                'min_sizes': [46, 46, 46, 46, 46, 46],
                'max_sizes': [92, 92, 92, 92, 92, 92],
                'clip': False,
@@ -103,7 +103,7 @@ class SSD(nn.Module):
 
         # apply multibox head to source layers
         for (x, l, c) in zip(sources, self.loc, self.conf):
-            # print(x.shape)
+            print(x.shape)
             loc.append(l(x).permute(0, 2, 3, 1).contiguous())
             conf.append(c(x).permute(0, 2, 3, 1).contiguous())
 
@@ -141,9 +141,7 @@ def vgg(cfg, i, conv, acti, batch_norm=True):
     in_channels = i
     for v in cfg:
         if v == 'M':
-            layers += [nn.MaxPool2d(kernel_size=2, stride=2)]
-        elif v == 'C':
-            layers += [nn.MaxPool2d(kernel_size=2, stride=2, ceil_mode=True)]
+            layers += [nn.MaxPool2d(kernel_size=2, stride=2, padding=1)]
         else:
             conv2d = conv(in_channels, v, kernel_size=3, padding=1)
             if batch_norm:
@@ -152,24 +150,25 @@ def vgg(cfg, i, conv, acti, batch_norm=True):
                 layers += [conv2d, acti]
             in_channels = v
     pool5 = nn.MaxPool2d(kernel_size=3, stride=1, padding=1)
-    conv6 = conv(256, 512, kernel_size=3, padding=6, dilation=6)
+    conv6 = conv(256, 512, kernel_size=3)
     conv7 = conv(512, 512, kernel_size=1)
     layers += [pool5, conv6, acti, conv7, acti]
     return layers
 
 
-def add_extras(cfg, i, conv, batch_norm=True):
+def add_extras(cfg, i, conv):
     # Extra layers added to VGG for feature scaling
     layers = []
     in_channels = i
     flag = False
     for k, v in enumerate(cfg):
+
         if in_channels != 'S':
             if v == 'S':
-                layers += [conv(in_channels, cfg[k + 1],
-                           kernel_size=(3, 3)[flag], stride=2, padding=1)]
+                layers += [conv(in_channels, cfg[k + 1], kernel_size=(3, 3)[flag], stride=1, padding=1)]
             else:
                 layers += [conv(in_channels, v, kernel_size=(1, 3)[flag])]
+
             flag = not flag
         in_channels = v
     return layers
@@ -178,10 +177,12 @@ def add_extras(cfg, i, conv, batch_norm=True):
 def multibox(vgg, extra_layers, cfg, num_classes, conv, acti, batch_norm=True):
     loc_layers = []
     conf_layers = []
+
     if batch_norm:
         vgg_source = [27, -2]
     else:
         vgg_source = [21, -2]
+
     for k, v in enumerate(vgg_source):
         loc_layers += [conv(vgg[v].out_channels,
                        cfg[k] * 4, kernel_size=3, padding=1)]
@@ -197,17 +198,14 @@ def multibox(vgg, extra_layers, cfg, num_classes, conv, acti, batch_norm=True):
 
 
 base = {
-    '300': [32, 32, 'M', 64, 64, 'M', 128, 128, 128, 'C', 256, 256, 256, 'M',
+    '300': [32, 32, 'M', 64, 64, 'M', 128, 128, 128, 'M', 256, 256, 256, 'M',
             256, 256, 256],
-    '512': [],
 }
 extras = {
     '300': [128, 'S', 256, 64, 'S', 128, 64, 128, 64, 128],
-    '512': [],
 }
 mbox = {
     '300': [2, 2, 2, 2, 2, 2],  # number of boxes per feature map location
-    '512': [],
 }
 
 
@@ -228,9 +226,6 @@ def build_ssd(phase, size=300, num_classes=21, binary=True):
     acti = nn.ReLU(inplace=True)
 
     base_, extras_, head_ = multibox(vgg(base[str(size)], 2, conv, acti),
-                                     add_extras(extras[str(size)],
-                                                512,
-                                                conv,
-                                                acti),
+                                     add_extras(extras[str(size)], 512, conv),
                                      mbox[str(size)], num_classes, conv, acti)
     return SSD(phase, size, base_, extras_, head_, num_classes)
