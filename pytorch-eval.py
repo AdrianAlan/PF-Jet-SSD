@@ -105,7 +105,7 @@ def test_net(model, dataset, top_k, im_size=(300, 300),
                         all_detections[x][6] = 1
                         break
 
-                if detected:
+                if not detected:
                     fn = np.hstack((np.zeros(6), [1])).astype(np.float32,
                                                               copy=False)
                     all_detections = np.vstack((all_detections, fn))
