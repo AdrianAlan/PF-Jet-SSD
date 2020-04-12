@@ -158,5 +158,5 @@ if __name__ == '__main__':
         ap, it = test_net(net, train_loader, top_k=10, im_size=(360, 340),
                           conf_threshold=0.01, overlap_threshold=0.5,
                           plot_name=plot_name, jet_class=i)
-        print('Average precision for class {0}: {1:.2f}'.format(i, ap))
-        print('Average inference time for class {0}: {1:.2f} ms'.format(i, it))
+        print('Average precision for class {0}: {1:.3f}'.format(i, ap))
+        print('Average inference time for class {0}: {1:.3f} ms'.format(i, it))

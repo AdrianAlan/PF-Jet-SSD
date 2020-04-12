@@ -89,7 +89,7 @@ class Plotting():
         plt.plot(recall, precision,
                  linestyle=self.line_styles[0],
                  color=color['shade_800'],
-                 label='AP {0: .2f}'.format(ap))
+                 label='AP {0: .3f}'.format(ap))
 
         plt.legend(loc="upper right",
                    frameon=False)
