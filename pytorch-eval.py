@@ -110,7 +110,7 @@ def test_net(model, dataset, top_k, im_size=(300, 300),
                                                               copy=False)
                     all_detections = np.vstack((all_detections, fn))
 
-                results = np.vstack((results, all_detections[:, [6, 5]]))
+            results = np.vstack((results, all_detections[:, [6, 5]]))
 
             progress_bar.update(1)
 
