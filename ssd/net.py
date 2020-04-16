@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 from ssd.layers import *
 import os
-
+from operator import itemgetter
 
 class SSD(nn.Module):
     """Single Shot Multibox Architecture
@@ -32,10 +32,10 @@ class SSD(nn.Module):
 
         jet = {'num_classes': 2,
                'min_dim': (360, 340),
-               'feature_maps_phi': [46, 22, 22, 22, 20, 18],
-               'feature_maps_eta': [44, 21, 21, 21, 19, 17],
-               'steps_phi': [8, 17, 17, 17, 18, 20],
-               'steps_eta': [8, 17, 17, 17, 18, 20],
+               'feature_maps_phi': [46, 22, 22, 12, 5, 3],
+               'feature_maps_eta': [44, 21, 21, 11, 4, 2],
+               'steps_phi': [8, 17, 17, 30, 72, 120],
+               'steps_eta': [8, 17, 17, 31, 85, 170],
                'min_sizes': [46, 46, 46, 46, 46, 46],
                'max_sizes': [92, 92, 92, 92, 92, 92],
                'clip': False,
@@ -97,13 +97,15 @@ class SSD(nn.Module):
 
         # apply extra layers and cache source layer outputs
         for k, v in enumerate(self.extras):
-            x = F.relu(v(x), inplace=True)
-            if k % 2 == 1:
-                sources.append(x)
+            if k not in [2, 5]:
+                x = F.relu(v(x), inplace=True)
+                if k in [1, 4, 7, 9]:
+                    sources.append(x)
+            else:
+                x = v(x)
 
         # apply multibox head to source layers
         for (x, l, c) in zip(sources, self.loc, self.conf):
-            print(x.shape)
             loc.append(l(x).permute(0, 2, 3, 1).contiguous())
             conf.append(c(x).permute(0, 2, 3, 1).contiguous())
 
@@ -113,7 +115,7 @@ class SSD(nn.Module):
             output = self.detect.apply(
                 loc.view(loc.size(0), -1, 4),
                 self.softmax(conf.view(conf.size(0), -1, self.num_classes)),
-                self.priors.type(type(x.data))
+                self.priors.type(type(x.data)), 2, 200, 0.01, 0.25
             )
         else:
             output = (
@@ -166,9 +168,9 @@ def add_extras(cfg, i, conv):
         if in_channels != 'S':
             if v == 'S':
                 layers += [conv(in_channels, cfg[k + 1], kernel_size=(3, 3)[flag], stride=1, padding=1)]
+                layers += [nn.MaxPool2d(kernel_size=2, stride=2, padding=1)]
             else:
                 layers += [conv(in_channels, v, kernel_size=(1, 3)[flag])]
-
             flag = not flag
         in_channels = v
     return layers
@@ -188,8 +190,8 @@ def multibox(vgg, extra_layers, cfg, num_classes, conv, acti, batch_norm=True):
                        cfg[k] * 4, kernel_size=3, padding=1)]
         conf_layers += [conv(vgg[v].out_channels,
                         cfg[k] * num_classes, kernel_size=3, padding=1)]
-
-    for k, v in enumerate(extra_layers[1::2], 2):
+    indexes = [1,4,7,9]
+    for k, v in enumerate(list(itemgetter(*indexes)(extra_layers)), 2):
         loc_layers += [conv(v.out_channels, cfg[k]
                        * 4, kernel_size=3, padding=1)]
         conf_layers += [conv(v.out_channels, cfg[k]
