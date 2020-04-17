@@ -52,8 +52,9 @@ else:
 
 
 HOME = pathlib.Path().absolute()
-DATA_SOURCE = '/eos/user/a/adpol/ceva/fast'
-BINARY = True
+DATA_SOURCE = '/mnt/home/apol/ceph/fast-three'
+QUANTIZED = True
+TYPE = 'ternary'
 
 dataset = 'ssd-jet-binary'
 train_dataset_path = '%s/RSGraviton_NARROW_0.h5' % DATA_SOURCE
@@ -66,8 +67,8 @@ num_classes = 1
 batch_size = 50
 train_epochs = 10
 
-if BINARY:
-    lr = 1e-3
+if QUANTIZED:
+    lr = 1e-1
     lrs = [5e-3, 1e-3, 5e-4, 1e-4]
     momentum = 0.9
     lr_steps = [10, 15, 20, 25]
@@ -101,7 +102,7 @@ val_loader = torch.utils.data.DataLoader(val_dataset,
                                          num_workers=num_workers)
 
 # Build SSD Network
-ssd_net = build_ssd('train', 300, num_classes + 1, BINARY)
+ssd_net = build_ssd('train', 300, num_classes + 1, qtype=TYPE)
 
 # Data Parallelization
 net = torch.nn.DataParallel(ssd_net)
@@ -164,14 +165,14 @@ for epoch in range(1, train_epochs+1):
         loss = loss_l + loss_c
         loss.backward()
 
-        if BINARY:
+        if QUANTIZED:
             for p in list(net.parameters()):
                 if hasattr(p, 'org'):
                     p.data.copy_(p.org)
 
         optimizer.step()
 
-        if BINARY:
+        if QUANTIZED:
             for p in list(net.parameters()):
                 if hasattr(p, 'org'):
                     p.org.copy_(p.data.clamp_(-1, 1))

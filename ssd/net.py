@@ -211,7 +211,7 @@ mbox = {
 }
 
 
-def build_ssd(phase, size=300, num_classes=21, binary=True):
+def build_ssd(phase, size=300, num_classes=21, qtype='full'):
     if phase != "test" and phase != "train":
         print("ERROR: Phase: " + phase + " not recognized")
         return
@@ -220,8 +220,10 @@ def build_ssd(phase, size=300, num_classes=21, binary=True):
               "currently only SSD300 (size=300) is supported!")
         return
 
-    if binary:
+    if qtype == 'binary':
         conv = BinaryConv2d
+    elif qtype == 'ternary':
+        conv = TernaryConv2d
     else:
         conv = nn.Conv2d
 
