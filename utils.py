@@ -3,97 +3,77 @@ import matplotlib.pyplot as plt
 import numpy as np
 import simplejson as json
 
+from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 
 class Plotting():
 
     def __init__(self, save_path):
 
         self.save_path = save_path
+        self.line_styles = [(0, ()), (0, (3, 2))]
 
-        matplotlib.rcParams["figure.figsize"] = (8.0, 5.0)
-        matplotlib.rcParams['font.family'] = 'sans-serif'
-
-        matplotlib.rcParams["axes.spines.left"] = True
-        matplotlib.rcParams["axes.spines.top"] = True
-        matplotlib.rcParams["axes.spines.right"] = True
-        matplotlib.rcParams["axes.spines.bottom"] = True
-
-        matplotlib.rcParams["axes.labelsize"] = 16
-
-        matplotlib.rcParams["axes.titlesize"] = 14
-
-        matplotlib.rcParams["xtick.top"] = True
-        matplotlib.rcParams["xtick.direction"] = "in"
-        matplotlib.rcParams["xtick.labelsize"] = 14
-        matplotlib.rcParams["xtick.major.size"] = 10
-        matplotlib.rcParams["xtick.minor.size"] = 5
-        matplotlib.rcParams["xtick.minor.visible"] = True
-
-        matplotlib.rcParams["ytick.right"] = True
-        matplotlib.rcParams["ytick.direction"] = "in"
-        matplotlib.rcParams["ytick.labelsize"] = 14
-        matplotlib.rcParams["ytick.major.size"] = 10
-        matplotlib.rcParams["ytick.minor.size"] = 5
-
-        matplotlib.rcParams["lines.linewidth"] = 2
-
-        matplotlib.rcParams["legend.fontsize"] = 14
+        plt.style.use('plots/ssdjet.mplstyle')
+        matplotlib.rcParams["figure.figsize"] = (8.0, 6.0)
 
         with open('./data/palette.json') as json_file:
-            color_palette = json.load(json_file)
-
-        self.colors = [color_palette['indigo'],
-                       color_palette['red'],
-                       color_palette['brown']]
-
-        self.line_styles = [(0, ()), (0, (3, 2))]
+            self.color_palette = json.load(json_file)
+        self.colors = [self.color_palette['indigo'],
+                       self.color_palette['red'],
+                       self.color_palette['green']]
 
     def draw_loss(self, data_train, data_val, keys):
         """Plots the training and validation loss"""
-        fig, ax = plt.subplots()
 
+        fig, ax = plt.subplots()
         plt.xlabel("Epoch", horizontalalignment='right', x=1.0)
         plt.ylabel("Loss", horizontalalignment='right', y=1.0)
+        plt.yscale("log")
 
         for x, (train, val, key) in enumerate(zip(data_train, data_val, keys)):
             color = self.colors[x]
-
             plt.plot(train,
                      linestyle=self.line_styles[0],
                      color=color['shade_800'],
                      label=key)
-
             plt.plot(val,
                      linestyle=self.line_styles[1],
                      color=color['shade_400'])
 
-            plt.legend(loc="upper right",
-                       frameon=False)
-            plt.yscale("log")
+        ax.legend()
+        ax.text(0, 1.02, 'CMS',
+                weight='bold',
+                transform=ax.transAxes,
+                color=self.color_palette['grey']['shade_900'],
+                fontsize=14)
 
-        fig.savefig(self.save_path, bbox_inches="tight")
-
+        fig.savefig(self.save_path)
         plt.close(fig)
 
-    def draw_precision_recall(self, precision, recall, ap):
+    def draw_precision_recall(self, data):
+        """Plots the precision recall curve"""
 
         fig, ax = plt.subplots()
+        plt.xlabel("Recall (TPR)", horizontalalignment='right', x=1.0)
+        plt.ylabel("Precision (PPV)", horizontalalignment='right', y=1.0)
 
-        plt.xlabel("Recall", horizontalalignment='right', x=1.0)
-        plt.ylabel("Precision", horizontalalignment='right', y=1.0)
+        for x, (recall, precision, jet, ap) in enumerate(data):
+            recall = np.append(1, recall)
+            precision = np.append(0, precision)
+            plt.plot(recall, precision,
+                     linestyle=self.line_styles[0],
+                     color=self.colors[x]['shade_800'],
+                     label='{0}, AP: {1:.3f}'.format(jet, ap))
 
-        color = self.colors[0]
-        precision = np.append(0, precision)
-        recall = np.append(1, recall)
+        ax.legend()
+        ax.text(0, 1.02, 'CMS',
+                weight='bold',
+                transform=ax.transAxes,
+                color=self.color_palette['grey']['shade_900'],
+                fontsize=14)
+               
+        logo = OffsetImage(plt.imread('./plots/hls4mllogo.jpg', format='jpg'), zoom=0.08)
+        ab = AnnotationBbox(logo, [0, 1], xybox=(0.12, 1.085), frameon=False)
+        ax.add_artist(ab)
 
-        plt.plot(recall, precision,
-                 linestyle=self.line_styles[0],
-                 color=color['shade_800'],
-                 label='AP {0: .3f}'.format(ap))
-
-        plt.legend(loc="upper right",
-                   frameon=False)
-
-        fig.savefig(self.save_path, bbox_inches="tight")
-
+        fig.savefig(self.save_path)
         plt.close(fig)
