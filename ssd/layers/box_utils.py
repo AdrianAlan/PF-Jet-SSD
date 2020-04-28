@@ -14,18 +14,6 @@ def point_form(boxes):
                      boxes[:, :2] + boxes[:, 2:]/2), 1)  # xmax, ymax
 
 
-def center_size(boxes):
-    """ Convert prior_boxes to (cx, cy, w, h)
-    representation for comparison to center-size form ground truth data.
-    Args:
-        boxes: (tensor) point_form boxes
-    Return:
-        boxes: (tensor) Converted xmin, ymin, xmax, ymax form of boxes.
-    """
-    return torch.cat((boxes[:, 2:] + boxes[:, :2])/2,  # cx, cy
-                     boxes[:, 2:] - boxes[:, :2], 1)  # w, h
-
-
 def intersect(box_a, box_b):
     """ We resize both tensors to [A,B,2] without new malloc:
     [A,2] -> [A,1,2] -> [A,B,2]
@@ -113,8 +101,8 @@ def match(threshold, truths, priors, variances, labels, loc_t, conf_t, idx):
 
 
 def encode(matched, priors, variances):
-    """Encode the variances from the priorbox layers into the ground truth boxes
-    we have matched (based on jaccard overlap) with the prior boxes.
+    """Encode the variances from the priorbox layers into the ground truth
+    boxes we have matched (based on jaccard overlap) with the prior boxes.
     Args:
         matched: (tensor) Coords of ground truth for each prior in point-form
             Shape: [num_priors, 4].

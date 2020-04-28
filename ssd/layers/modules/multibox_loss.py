@@ -1,26 +1,24 @@
-# -*- coding: utf-8 -*-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.autograd import Variable
+
 from ..box_utils import match, log_sum_exp
+from torch.autograd import Variable
 
 
 class MultiBoxLoss(nn.Module):
     """SSD Weighted Loss Function
     Compute Targets:
-        1) Produce Confidence Target Indices by matching  ground truth boxes
-           with (default) 'priorboxes' that have jaccard index > threshold parameter
-           (default threshold: 0.5).
-        2) Produce localization target by 'encoding' variance into offsets of ground
-           truth boxes and their matched  'priorboxes'.
-        3) Hard negative mining to filter the excessive number of negative examples
-           that comes with using a large number of default bounding boxes.
-           (default negative:positive ratio 3:1)
+    1) Produce Confidence Target Indices by matching  ground truth boxes with
+       'priorboxes' that have jaccard index > threshold parameter
+    2) Produce localization target by 'encoding' variance into offsets of
+       ground truth boxes and their matched 'priorboxes'.
+    3) Hard negative mining to filter the excessive number of negative examples
+       that comes with using a large number of default bounding boxes.
     Objective Loss:
-        L(x,c,l,g) = (Lconf(x, c) + αLloc(x,l,g)) / N
-        Where, Lconf is the CrossEntropy Loss and Lloc is the SmoothL1 Loss
-        weighted by α which is set to 1 by cross val.
+        L(x,c,l,g) = (L_conf(x, c) + alpha*L_loc(x,l,g)) / N
+        Where, L_conf is the CrossEntropy Loss and L_loc is the SmoothL1 Loss
+        weighted by alpha which is set to 1 by cross val.
         Args:
             c: class confidences,
             l: predicted boxes,
@@ -28,20 +26,13 @@ class MultiBoxLoss(nn.Module):
             N: number of matched default boxes
         See: https://arxiv.org/pdf/1512.02325.pdf for more details.
     """
-
-    def __init__(self, num_classes, overlap_thresh, prior_for_matching,
-                 bkg_label, neg_mining, neg_pos, neg_overlap, encode_target,
-                 use_gpu=True):
+    def __init__(self, num_classes, min_overlap=0.5, neg_pos=3, use_gpu=True):
         super(MultiBoxLoss, self).__init__()
-        self.use_gpu = use_gpu
+
         self.num_classes = num_classes
-        self.threshold = overlap_thresh
-        self.background_label = bkg_label
-        self.encode_target = encode_target
-        self.use_prior_for_matching = prior_for_matching
-        self.do_neg_mining = neg_mining
+        self.threshold = min_overlap
         self.negpos_ratio = neg_pos
-        self.neg_overlap = neg_overlap
+        self.use_gpu = use_gpu
         self.variance = [.1, .2]
 
     def forward(self, predictions, targets):
@@ -86,15 +77,13 @@ class MultiBoxLoss(nn.Module):
         pos_idx = pos.unsqueeze(pos.dim()).expand_as(loc_data)
         loc_p = loc_data[pos_idx].view(-1, 4)
         loc_t = loc_t[pos_idx].view(-1, 4)
-        #loss_l = F.smooth_l1_loss(loc_p, loc_t, size_average=False)
         loss_l = F.smooth_l1_loss(loc_p, loc_t, reduction='sum')
 
         # Compute max conf across batch for hard negative mining
-        batch_conf = conf_data.view(-1, self.num_classes)
-        loss_c = log_sum_exp(batch_conf) - batch_conf.gather(1, conf_t.view(-1, 1))
+        b_conf = conf_data.view(-1, self.num_classes)
+        loss_c = log_sum_exp(b_conf) - b_conf.gather(1, conf_t.view(-1, 1))
 
         # Hard Negative Mining
-        #loss_c = loss_c.view(pos.size()[0], pos.size()[1])
         loss_c = loss_c.view(num, -1)
         loss_c[pos] = 0  # filter out pos boxes for now
         _, loss_idx = loss_c.sort(1, descending=True)
@@ -111,8 +100,6 @@ class MultiBoxLoss(nn.Module):
         loss_c = F.cross_entropy(conf_p, targets_weighted, reduction='sum')
 
         # Sum of losses: L(x,c,l,g) = (Lconf(x, c) + αLloc(x,l,g)) / N
-
-        #N = num_pos.data.sum()
         N = num_pos.data.sum().double()
         loss_l = loss_l.double()
         locc_c = loss_c.double()

@@ -1,18 +1,19 @@
 import torch
+
 from torch.autograd import Function
 from ..box_utils import decode, nms
 
 
 class Detect(Function):
-    """At test time, Detect is the final layer of SSD.  Decode location preds,
-    apply non-maximum suppression to location predictions based on conf
-    scores and threshold to a top_k number of output predictions for both
-    confidence score and locations.
+    """At inference Detect is the final layer of SSD.
+    1) Decode location predictions.
+    2) Apply non-maximum suppression to location predictions.
+    3) Threshold to a top_k number of output predictions.
     """
 
     @staticmethod
     def forward(ctx, loc_data, conf_data, prior_data,
-                num_classes=2, top_k=200, conf_thresh=0.01, nms_thresh=0.45):
+                num_classes, top_k, conf_thresh, nms_thresh):
         """
         Args:
             loc_data: (tensor) Loc preds from loc layers
@@ -22,22 +23,20 @@ class Detect(Function):
             prior_data: (tensor) Prior boxes and variances from priorbox layers
                 Shape: [1,num_priors,4]
         """
-        if nms_thresh <= 0:
-            raise ValueError('nms_threshold must be non negative.')
-
         variance = [.1, .2]
-        num = loc_data.size(0)  # batch size
+        batch_size = loc_data.size(0)
         num_priors = prior_data.size(0)
-        output = torch.zeros(num, num_classes, top_k, 5)
-        conf_preds = conf_data.view(num, num_priors,
+        output = torch.zeros(batch_size, num_classes, top_k, 5)
+        conf_preds = conf_data.view(batch_size,
+                                    num_priors,
                                     num_classes).transpose(2, 1)
 
         # Decode predictions into bboxes.
-        for i in range(num):
+        for i in range(batch_size):
             decoded_boxes = decode(loc_data[i], prior_data, variance)
+
             # For each class, perform nms
             conf_scores = conf_preds[i].clone()
-
             for cl in range(1, num_classes):
                 c_mask = conf_scores[cl].gt(conf_thresh)
                 scores = conf_scores[cl][c_mask]
@@ -50,8 +49,4 @@ class Detect(Function):
                 output[i, cl, :count] = \
                     torch.cat((scores[ids[:count]].unsqueeze(1),
                                boxes[ids[:count]]), 1)
-        flt = output.contiguous().view(num, -1, 5)
-        _, idx = flt[:, :, 0].sort(1, descending=True)
-        _, rank = idx.sort(1)
-        flt[(rank < top_k).unsqueeze(-1).expand_as(flt)].fill_(0)
         return output

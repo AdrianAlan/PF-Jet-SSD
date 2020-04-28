@@ -57,8 +57,8 @@ class TernaryConv2d(nn.Conv2d):
 
     def forward(self, input):
 
-        if input.size(1) != 2:
-            input.data = Ternary(input.data)
+        # if input.size(1) != 2:
+        #     input.data = Binary(input.data)
 
         if not hasattr(self.weight, 'org'):
             self.weight.org = self.weight.data.clone()
@@ -79,10 +79,10 @@ def Binary(tensor):
     tensor_clone = tensor.clone()
     return tensor_clone.sign()
 
-def Ternary(tensor, delta=0.1):
-    tensor_clone = tensor.clone()
-    tensor_clone[tensor > delta] = 1
-    tensor_clone[tensor < -delta] = -1
-    tensor_clone[torch.abs(tensor) <= delta] = 0
-    return tensor_clone
 
+def Ternary(tensor, delta=None):
+    if not delta:
+        delta = .7*(torch.abs(tensor).mean())
+    return torch.where(torch.abs(tensor) < delta,
+                       torch.zeros_like(tensor),
+                       tensor.sign())

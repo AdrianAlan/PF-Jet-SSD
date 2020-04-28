@@ -6,6 +6,7 @@ import torch
 class CalorimeterJetDataset(torch.utils.data.Dataset):
 
     def __init__(self, hdf5_dataset=None):
+        """Generator for calorimeter and jet data"""
 
         self.hdf5_dataset = hdf5_dataset
 
@@ -56,8 +57,11 @@ class CalorimeterJetDataset(torch.utils.data.Dataset):
         i = torch.LongTensor([indices_channels, indices_phi, indices_eta])
         v = torch.FloatTensor(energy)
         pixels = torch.sparse.FloatTensor(i, v,
-             torch.Size([self.channels, self.height, self.width]))
-        
+                                          torch.Size([self.channels,
+                                                      self.height,
+                                                      self.width])
+                                          )
+
         return pixels.to_dense()
 
     def __getitem__(self, index):

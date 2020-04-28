@@ -3,9 +3,11 @@ import torch
 
 
 class EarlyStopping:
-    '''Early stopping checkpont'''
+
     def __init__(self, patience=7, delta=10e-6,
                  save_best=True, save_path='./', verbose=False):
+        """Early stopping checkpont"""
+
         self.patience = patience
         self.delta = delta
         self.save_best = save_best
@@ -17,11 +19,11 @@ class EarlyStopping:
         self.early_stop = False
 
         if self.verbose:
-            print('Initiated early stopping with patience {}.'.format(
+            print("Initiated early stopping with patience {}.".format(
                   self.patience))
 
     def __call__(self, loss, model):
-        '''Veryfy if training should be terminated'''
+        """Veryfy if training should be terminated"""
 
         if loss < self.best_score - self.delta:
             self.counter = 0  # Reset counter
@@ -31,12 +33,13 @@ class EarlyStopping:
         else:
             self.counter += 1  # Increment counter
             if self.counter == self.patience:
-                print('Stopped!')
+                print("Stopped by checkpoint!")
                 return True
         return False
 
     def save_checkpoint(self, model):
-        '''Saves model when validation loss decrease.'''
+        """Saves model when validation loss decrease."""
+
         if self.verbose:
-            print('Checkpoint: saving model')
+            print("Checkpoint: saving model")
         torch.save(model.state_dict(), self.save_path)
