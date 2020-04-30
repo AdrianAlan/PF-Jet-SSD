@@ -1,5 +1,6 @@
 from __future__ import print_function
 
+import argparse
 import h5py
 import numpy as np
 import torch
@@ -14,6 +15,15 @@ from ssd.net import build_ssd
 from time import time
 from tqdm import tqdm
 from utils import Plotting
+
+
+def get_data_loader(source_path, batch_size, num_workers, shuffle=False):
+    h5 = h5py.File(source_path, 'r')
+    generator = CalorimeterJetDataset(hdf5_dataset=h5)
+    return torch.utils.data.DataLoader(generator,
+                                       batch_size=batch_size,
+                                       shuffle=shuffle,
+                                       num_workers=num_workers), h5
 
 
 def test_net(model, dataset, top_k=200, im_size=(300, 300),
@@ -73,7 +83,7 @@ def test_net(model, dataset, top_k=200, im_size=(300, 300),
                 scores = dets[:, 0].cpu().numpy()
                 labels = np.array([j-1]*len(scores))
 
-                # Detection format: [xmin, ymin, xmax, ymax, label, score, tp/fp]
+                # Detection format: [xmin, ymin, xmax, ymax, label, score, gt]
                 class_det = np.hstack((boxes.cpu().numpy(),
                                        labels[:, np.newaxis],
                                        scores[:, np.newaxis],
@@ -129,43 +139,59 @@ def test_net(model, dataset, top_k=200, im_size=(300, 300),
 
 if __name__ == '__main__':
 
+    parser = argparse.ArgumentParser('Evaluate Jet Detection Model')
+    parser.add_argument('source_path', type=str, help='Model source path')
+    parser.add_argument('qtype', type=str,
+                        choices={'full', 'ternary', 'binary'},
+                        help='Type of quantization')
+    parser.add_argument('out_plot_path', type=str, help='Path to output plot')
+    parser.add_argument('test_dataset', type=str,
+                        help='Path to test dataset')
+    parser.add_argument('-c', '--classes', type=int, default=1,
+                        help='Number of target classes', dest='num_classes')
+    parser.add_argument('-w', '--workers', type=int, default=1,
+                        help='Number of workers', dest='num_workers')
+    parser.add_argument('-ot', '--overlap-threshold', type=float,
+                        default='0.5', help='IoU threshold',
+                        dest='overlap_threshold')
+    parser.add_argument('-ct', '--confidence-threshold', type=float,
+                        default='0.01', help='Confidence threshold',
+                        dest='confidence_threshold')
+    parser.add_argument('-m', '--multi', type=bool, default=False,
+                        help='If multi class',
+                        dest='multi')
+    args = parser.parse_args()
+
     if torch.cuda.is_available():
         torch.set_default_tensor_type('torch.cuda.FloatTensor')
     else:
         torch.set_default_tensor_type('torch.FloatTensor')
 
-    # To change:
-    model_source_path = './models/ssd-jet-one-class-ternary-test.pth'
-    plot_name = './plots/precision-recall-ternary'
-    multi = False
-    num_classes = 1
+    model_source_path = args.source_path
+    plot_name = args.out_plot_path
+    multi = args.multi
+    num_classes = args.num_classes
+    jet_classes = ['h', 'W', 't']
+    im_size = (360, 340)
+    top_k = 10
 
     num_classes = num_classes + 1  # +1 for background
-    jet_classes = ['h', 'W', 't']
-    net = build_ssd('test', num_classes, 'ternary')
+    net = build_ssd('test', num_classes, args.qtype)
     net.load_weights(model_source_path)
     net.eval()
     net = net.cuda()
     cudnn.benchmark = True
 
-    train_dataset_path = '/mnt/home/apol/ceph/fast-three/RSGraviton_NARROW_1.h5'
-    h5_train = h5py.File(train_dataset_path, 'r')
-    train_dataset = CalorimeterJetDataset(hdf5_dataset=h5_train)
-    train_loader = torch.utils.data.DataLoader(train_dataset,
-                                               batch_size=1,
-                                               shuffle=False,
-                                               num_workers=1)
+    loader, h5 = get_data_loader(args.test_dataset, 1, args.num_workers,
+                                 shuffle=False)
 
     results = []
     for i in range(len(jet_classes)):
-        ap, it, recall, precision = test_net(net, train_loader, top_k=10,
-                                             im_size=(360, 340),
-                                             conf_threshold=0.01,
-                                             overlap_threshold=0.5,
-                                             jet_class=i,
-                                             multi_class=multi)
-
-        results.append((recall, precision, jet_classes[i], ap))
+        ap, it, r, p = test_net(net, loader, top_k=top_k, im_size=im_size,
+                                conf_threshold=args.confidence_threshold,
+                                overlap_threshold=args.overlap_threshold,
+                                jet_class=i, multi_class=multi)
+        results.append((r, p, jet_classes[i], ap))
         print('\nAverage precision for class {0}: {1:.3f}'.format(i, ap))
         print('Average inference time for class {0}: {1:.3f} ms'.format(i, it))
 
