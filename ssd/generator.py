@@ -59,8 +59,7 @@ class CalorimeterJetDataset(torch.utils.data.Dataset):
         pixels = torch.sparse.FloatTensor(i, v,
                                           torch.Size([self.channels,
                                                       self.height,
-                                                      self.width])
-                                          )
+                                                      self.width]))
 
         return pixels.to_dense()
 
