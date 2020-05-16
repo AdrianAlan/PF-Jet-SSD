@@ -185,3 +185,5 @@ if __name__ == '__main__':
         print('Average precision for class {0}: {1:.3f}'.format(c, ap))
     plot = Plotting(save_path=plot_name)
     plot.draw_precision_recall(results)
+
+    h5.close()
