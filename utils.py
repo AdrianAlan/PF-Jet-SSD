@@ -5,12 +5,14 @@ import simplejson as json
 
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 
+
 class Plotting():
 
-    def __init__(self, save_path):
+    def __init__(self, save_path, ref_recall=0.3):
 
         self.save_path = save_path
-        self.line_styles = [(0, ()), (0, (3, 2))]
+        self.line_styles = [(0, ()), (0, (3, 2)), (0, (3, 2))]
+        self.ref_recall = ref_recall
 
         plt.style.use('plots/ssdjet.mplstyle')
         matplotlib.rcParams["figure.figsize"] = (8.0, 6.0)
@@ -44,7 +46,7 @@ class Plotting():
                 weight='bold',
                 transform=ax.transAxes,
                 color=self.color_palette['grey']['shade_900'],
-                fontsize=14)
+                fontsize=13)
 
         fig.savefig(self.save_path)
         plt.close(fig)
@@ -56,22 +58,42 @@ class Plotting():
         plt.xlabel("Recall (TPR)", horizontalalignment='right', x=1.0)
         plt.ylabel("Precision (PPV)", horizontalalignment='right', y=1.0)
 
+        ref_precisions = []
         for x, (recall, precision, jet, ap) in enumerate(data):
+            # Helper line
+            ref_precision = np.round(
+                precision[(np.abs(recall - self.ref_recall)).argmin()], 2)
+            ref_precisions.append(ref_precision)
+            ax.plot([0, 0.3], [ref_precision, ref_precision],
+                    linestyle=self.line_styles[2],
+                    alpha=0.5,
+                    color=self.color_palette['grey']['shade_500'])
+
             recall = np.append(1, recall)
             precision = np.append(0, precision)
             plt.plot(recall, precision,
                      linestyle=self.line_styles[0],
                      color=self.colors[x]['shade_800'],
-                     label='{0}, AP: {1:.3f}'.format(jet, ap))
+                     label='{0} jets, AP: {1:.3f}'.format(jet, ap))
 
-        ax.legend()
+        # Helper line c.d.
+        plt.xticks(list(plt.xticks()[0]) + [self.ref_recall])
+        plt.yticks([0, 1] + ref_precisions)
+        ax.plot([0.3, 0.3], [0, np.max(ref_precisions)],
+                linestyle=self.line_styles[2],
+                alpha=0.5,
+                color=self.color_palette['grey']['shade_500'])
+
+        ax.legend(loc='upper center', bbox_to_anchor=(0.1, -0.1))
+
         ax.text(0, 1.02, 'CMS',
                 weight='bold',
                 transform=ax.transAxes,
                 color=self.color_palette['grey']['shade_900'],
-                fontsize=14)
-               
-        logo = OffsetImage(plt.imread('./plots/hls4mllogo.jpg', format='jpg'), zoom=0.08)
+                fontsize=13)
+
+        logo = OffsetImage(plt.imread('./plots/hls4mllogo.jpg', format='jpg'),
+                           zoom=0.08)
         ab = AnnotationBbox(logo, [0, 1], xybox=(0.12, 1.085), frameon=False)
         ax.add_artist(ab)
 

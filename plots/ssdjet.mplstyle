@@ -23,7 +23,7 @@ grid.alpha: 0.3
 grid.linestyle: --
 grid.linewidth: 0.6
 
-legend.fontsize: 14
+legend.fontsize: 10
 legend.frameon: False
 legend.handlelength: 0.7
 
