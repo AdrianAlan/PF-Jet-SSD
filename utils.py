@@ -11,7 +11,8 @@ class Plotting():
     def __init__(self, save_path, ref_recall=0.3):
 
         self.save_path = save_path
-        self.line_styles = [(0, ()), (0, (3, 2)), (0, (3, 2))]
+        self.line_styles = [(0, ()), (0, (5, 2)), (0, (2, 2))]
+        self.legend = ['Full Precision Network', 'Ternary Weight Network']
         self.ref_recall = ref_recall
 
         plt.style.use('plots/ssdjet.mplstyle')
@@ -57,24 +58,28 @@ class Plotting():
         fig, ax = plt.subplots()
         plt.xlabel("Recall (TPR)", horizontalalignment='right', x=1.0)
         plt.ylabel("Precision (PPV)", horizontalalignment='right', y=1.0)
-
         ref_precisions = []
-        for x, (recall, precision, jet, ap) in enumerate(data):
-            # Helper line
-            ref_precision = np.round(
-                precision[(np.abs(recall - self.ref_recall)).argmin()], 2)
-            ref_precisions.append(ref_precision)
-            ax.plot([0, 0.3], [ref_precision, ref_precision],
-                    linestyle=self.line_styles[2],
-                    alpha=0.5,
-                    color=self.color_palette['grey']['shade_500'])
 
-            recall = np.append(1, recall)
-            precision = np.append(0, precision)
-            plt.plot(recall, precision,
-                     linestyle=self.line_styles[0],
-                     color=self.colors[x]['shade_800'],
-                     label='{0} jets, AP: {1:.3f}'.format(jet, ap))
+        for q, data_model in enumerate(data):
+            shade = 'shade_800' if q else 'shade_500'
+            for x, (recall, precision, jet, ap) in enumerate(data_model):
+                # Helper line
+                ref_precision = np.round(
+                    precision[(np.abs(recall - self.ref_recall)).argmin()], 2)
+                ref_precisions.append(ref_precision)
+                ax.plot([0, 0.3], [ref_precision, ref_precision],
+                        linestyle=self.line_styles[2],
+                        linewidth=0.8,
+                        alpha=0.5,
+                        color=self.color_palette['grey']['shade_500'])
+
+                recall = np.append(1, recall)
+                precision = np.append(0, precision)
+                plt.plot(recall, precision,
+                         linestyle=self.line_styles[q],
+                         color=self.colors[x][shade],
+                         label='{0}: {1} jets, AP: {2:.3f}'.format(
+                                 self.legend[q], jet, ap))
 
         # Helper line c.d.
         plt.xticks(list(plt.xticks()[0]) + [self.ref_recall])
@@ -84,7 +89,7 @@ class Plotting():
                 alpha=0.5,
                 color=self.color_palette['grey']['shade_500'])
 
-        ax.legend(loc='upper center', bbox_to_anchor=(0.1, -0.1))
+        ax.legend(loc='upper center', bbox_to_anchor=(0.25, -0.1))
 
         ax.text(0, 1.02, 'CMS',
                 weight='bold',

@@ -135,13 +135,12 @@ def test_net(model, dataset, top_k=200, im_size=(300, 300),
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser('Evaluate Jet Detection Model')
-    parser.add_argument('source_path', type=str, help='Model source path')
-    parser.add_argument('qtype', type=str,
-                        choices={'full', 'ternary', 'binary'},
-                        help='Type of quantization')
+    parser.add_argument('fpn_source_path', type=str,
+                        help='Full Precision Network model source path')
+    parser.add_argument('twn_source_path', type=str,
+                        help='Ternary Weight Network model source path')
     parser.add_argument('out_plot_path', type=str, help='Path to output plot')
-    parser.add_argument('test_dataset', type=str,
-                        help='Path to test dataset')
+    parser.add_argument('test_dataset', type=str, help='Path to test dataset')
     parser.add_argument('-c', '--classes', type=int, default=1,
                         help='Number of target classes', dest='num_classes')
     parser.add_argument('-w', '--workers', type=int, default=1,
@@ -159,31 +158,35 @@ if __name__ == '__main__':
     else:
         torch.set_default_tensor_type('torch.FloatTensor')
 
-    model_source_path = args.source_path
     plot_name = args.out_plot_path
     num_classes = args.num_classes
     jet_classes = ['H+W', 't']
     im_size = (360, 340)
     top_k = 10
-
     num_classes = num_classes + 1  # +1 for background
-    net = build_ssd('test', num_classes, args.qtype)
-    net.load_weights(model_source_path)
-    net.eval()
-    net = net.cuda()
-    cudnn.benchmark = True
+    plotting_data = []
 
-    loader, h5 = get_data_loader(args.test_dataset, 1, args.num_workers,
-                                 shuffle=False)
+    for qtype, source_path in [('full', args.fpn_source_path),
+                               ('ternary', args.twn_source_path)]:
+        print('Testing {0} precision network model'.format(qtype))
+        net = build_ssd('test', num_classes, qtype)
+        net.load_weights(source_path)
+        net.eval()
+        net = net.cuda()
+        cudnn.benchmark = True
 
-    it, results = test_net(net, loader, top_k=top_k, im_size=im_size,
-                           conf_threshold=args.confidence_threshold,
-                           overlap_threshold=args.overlap_threshold,
-                           jet_classes=jet_classes)
-    print('Average inference time: {0:.3f} ms'.format(it))
-    for _, _, c, ap in results:
-        print('Average precision for class {0}: {1:.3f}'.format(c, ap))
+        loader, h5 = get_data_loader(args.test_dataset, 1, args.num_workers)
+
+        it, results = test_net(net, loader, top_k=top_k, im_size=im_size,
+                               conf_threshold=args.confidence_threshold,
+                               overlap_threshold=args.overlap_threshold,
+                               jet_classes=jet_classes)
+        print('\nAverage inference time: {0:.3f} ms'.format(it))
+        for _, _, c, ap in results:
+            print('Average precision for class {0}: {1:.3f}'.format(c, ap))
+        plotting_data.append(results)
+
     plot = Plotting(save_path=plot_name)
-    plot.draw_precision_recall(results)
+    plot.draw_precision_recall(plotting_data)
 
     h5.close()
