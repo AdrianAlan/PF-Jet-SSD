@@ -27,16 +27,14 @@ def get_data_loader(source_path, batch_size, num_workers, shuffle=False):
 
 
 def test_net(model, dataset, top_k=200, im_size=(300, 300),
-             conf_threshold=0.05, overlap_threshold=0.1,
-             jet_class=0, multi_class=True):
+             conf_threshold=0.05, overlap_threshold=0.1, jet_classes=[]):
 
-    results = np.empty((0, 2))
+    results = len(jet_classes)*[np.empty((0, 2))]
     inf_time = []
 
     with torch.no_grad():
 
         progress_bar = tqdm(total=len(dataset), desc='Evaluating events')
-        i = 0
         for data, targets in dataset:
 
             data = data.cuda()
@@ -46,19 +44,6 @@ def test_net(model, dataset, top_k=200, im_size=(300, 300),
             inf_time.append(t_end-t_start)
 
             targets = targets[0].cpu().numpy()
-            if np.unique(targets[:, 4])[0] != jet_class:
-                if multi_class:
-                    dets = detections[0, jet_class+1, :]
-                    dets = dets[dets[:, 0] > conf_threshold]
-
-                    scores = dets[:, 0].cpu().numpy()
-                    foo = np.hstack((np.zeros(len(scores))[:, np.newaxis],
-                                     scores[:, np.newaxis])).astype(np.float32,
-                                                                    copy=False)
-                    results = np.vstack((results, foo))
-                progress_bar.update(1)
-                continue
-
             targets[:, 0] *= im_size[0]
             targets[:, 2] *= im_size[0]
             targets[:, 1] *= im_size[1]
@@ -117,24 +102,34 @@ def test_net(model, dataset, top_k=200, im_size=(300, 300),
                     overlap = intersection / (union + 10e-12)
 
                     if overlap > overlap_threshold:
-                        if not multi_class or d[4] == jet_class:
+                        if d[4] == t[4]:
                             detected = True
                             all_detections[x][6] = 1
                             break
 
                 if not detected:
-                    fn = np.hstack((np.zeros(6), [1])).astype(np.float32,
-                                                              copy=False)
+                    fn = np.hstack((t, [0, 1])).astype(np.float32, copy=False)
                     all_detections = np.vstack((all_detections, fn))
-            i += 1
-            results = np.vstack((results, all_detections[:, [6, 5]]))
+
+            for c in range(len(jet_classes)):
+                class_detections = all_detections[all_detections[:, 4] == c]
+                results[c] = np.concatenate((results[c],
+                                             class_detections[:, [6, 5]]))
+
             progress_bar.update(1)
 
         progress_bar.close()
-        ap = average_precision_score(results[:, 0], results[:, 1])
+
         it = 1000*np.mean(inf_time)
-        p, r, _ = precision_recall_curve(results[:, 0], results[:, 1])
-        return ap, it, r, p
+
+        ret = []
+        for c in range(len(jet_classes)):
+            p, r, _ = precision_recall_curve(results[c][:, 0],
+                                             results[c][:, 1])
+            ap = average_precision_score(results[c][:, 0], results[c][:, 1])
+            ret.append((r, p, jet_classes[c], ap))
+
+        return it, ret
 
 
 if __name__ == '__main__':
@@ -157,9 +152,6 @@ if __name__ == '__main__':
     parser.add_argument('-ct', '--confidence-threshold', type=float,
                         default='0.01', help='Confidence threshold',
                         dest='confidence_threshold')
-    parser.add_argument('-m', '--multi', type=bool, default=False,
-                        help='If multi class',
-                        dest='multi')
     args = parser.parse_args()
 
     if torch.cuda.is_available():
@@ -169,9 +161,8 @@ if __name__ == '__main__':
 
     model_source_path = args.source_path
     plot_name = args.out_plot_path
-    multi = args.multi
     num_classes = args.num_classes
-    jet_classes = ['h', 'W', 't']
+    jet_classes = ['H+W', 't']
     im_size = (360, 340)
     top_k = 10
 
@@ -185,15 +176,12 @@ if __name__ == '__main__':
     loader, h5 = get_data_loader(args.test_dataset, 1, args.num_workers,
                                  shuffle=False)
 
-    results = []
-    for i in range(len(jet_classes)):
-        ap, it, r, p = test_net(net, loader, top_k=top_k, im_size=im_size,
-                                conf_threshold=args.confidence_threshold,
-                                overlap_threshold=args.overlap_threshold,
-                                jet_class=i, multi_class=multi)
-        results.append((r, p, jet_classes[i], ap))
-        print('\nAverage precision for class {0}: {1:.3f}'.format(i, ap))
-        print('Average inference time for class {0}: {1:.3f} ms'.format(i, it))
-
+    it, results = test_net(net, loader, top_k=top_k, im_size=im_size,
+                           conf_threshold=args.confidence_threshold,
+                           overlap_threshold=args.overlap_threshold,
+                           jet_classes=jet_classes)
+    print('Average inference time: {0:.3f} ms'.format(it))
+    for _, _, c, ap in results:
+        print('Average precision for class {0}: {1:.3f}'.format(c, ap))
     plot = Plotting(save_path=plot_name)
     plot.draw_precision_recall(results)
