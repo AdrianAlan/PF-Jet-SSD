@@ -2,8 +2,11 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import simplejson as json
+import torch
+import torch.nn as nn
 
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+from ssd.layers import *
 
 
 class Plotting():
@@ -104,3 +107,80 @@ class Plotting():
 
         fig.savefig(self.save_path)
         plt.close(fig)
+
+
+class GetResources():
+
+    def __init__(self, net, dummy_input):
+        self.net = net
+        self.dummy_input = dummy_input
+
+    def zero_ops(self, m, x, y):
+        m.total_ops += torch.DoubleTensor([int(0)]).cuda()
+
+    def count_convNd(self, m, x, y):
+        x = x[0]
+        # N x H x W (exclude Cout)
+        output = torch.zeros((y.size()[:1] + y.size()[2:])).numel()
+        # Cout x Cin x Kw x Kh
+        kernel_ops = m.weight.nelement()
+        if m.bias is not None:
+            # Cout x 1
+            kernel_ops += + m.bias.nelement()
+        # x N x H x W x Cout x (Cin x Kw x Kh + bias)
+        m.total_ops += torch.DoubleTensor([int(output * kernel_ops)]).cuda()
+
+    def count_bn(self, m, x, y):
+        x = x[0]
+        nelements = x.numel()
+        if not m.training:
+            nelements = 2 * nelements
+        m.total_ops += torch.DoubleTensor([int(nelements)]).cuda()
+
+    def count_relu(self, m, x, y):
+        x = x[0]
+        nelements = x.numel()
+        m.total_ops += torch.DoubleTensor([int(nelements)]).cuda()
+
+    def profile(self):
+        handler_collection = {}
+        types_collection = set()
+
+        register_hooks = {
+            nn.Conv2d: self.count_convNd,
+            TernaryConv2d: self.count_convNd,
+            BinaryConv2d: self.count_convNd,
+            nn.BatchNorm2d: self.count_bn,
+            nn.PReLU: self.count_relu,
+            nn.MaxPool2d: self.zero_ops
+        }
+
+        def add_hooks(m: nn.Module):
+            m.register_buffer('total_ops', torch.zeros(1, dtype=torch.float64))
+            m_type = type(m)
+
+            fn = None
+            if m_type in register_hooks:
+                fn = register_hooks[m_type]
+            if fn is not None:
+                handler_collection[m] = (m.register_forward_hook(fn))
+
+            types_collection.add(m_type)
+
+        def dfs_count(module: nn.Module, prefix="\t") -> (int, int):
+            total_ops = 0
+            for m in module.children():
+                if m in handler_collection and not isinstance(
+                          m, (nn.Sequential, nn.ModuleList)):
+                    m_ops = m.total_ops.item()
+                else:
+                    m_ops = dfs_count(m, prefix=prefix + "\t")
+                total_ops += m_ops
+            return total_ops
+
+        self.net.apply(add_hooks)
+        with torch.no_grad():
+            self.net(*(self.dummy_input, ))
+        total_ops = dfs_count(self.net)
+
+        return total_ops

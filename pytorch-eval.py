@@ -14,7 +14,7 @@ from ssd.generator import CalorimeterJetDataset
 from ssd.net import build_ssd
 from time import time
 from tqdm import tqdm
-from utils import Plotting
+from utils import Plotting, GetResources
 
 
 def get_data_loader(source_path, batch_size, num_workers, shuffle=False):
@@ -166,6 +166,9 @@ if __name__ == '__main__':
     num_classes = num_classes + 1  # +1 for background
     plotting_data = []
 
+    macs = GetResources(net, dummy_input=torch.randn(1, 2, 340, 360))
+    plot = Plotting(save_path=plot_name)
+
     for qtype, source_path in [('full', args.fpn_source_path),
                                ('ternary', args.twn_source_path)]:
         print('Testing {0} precision network model'.format(qtype))
@@ -181,12 +184,12 @@ if __name__ == '__main__':
                                conf_threshold=args.confidence_threshold,
                                overlap_threshold=args.overlap_threshold,
                                jet_classes=jet_classes)
-        print('\nAverage inference time: {0:.3f} ms'.format(it))
+        print('')
+        print('Total OPS: {0:.3f}G'.format(macs.profile() / 1e9))
+        print('Average inference time: {0:.3f} ms'.format(it))
         for _, _, c, ap in results:
             print('Average precision for class {0}: {1:.3f}'.format(c, ap))
         plotting_data.append(results)
 
-    plot = Plotting(save_path=plot_name)
     plot.draw_precision_recall(plotting_data)
-
     h5.close()
