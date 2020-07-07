@@ -160,7 +160,7 @@ if __name__ == '__main__':
 
     plot_name = args.out_plot_path
     num_classes = args.num_classes
-    jet_classes = ['H+W', 't']
+    jet_classes = ['b', 'H+W', 't']
     im_size = (360, 340)
     top_k = 10
     num_classes = num_classes + 1  # +1 for background
