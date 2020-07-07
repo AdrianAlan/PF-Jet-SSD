@@ -29,7 +29,7 @@ class SSD(nn.Module):
                   'feature_maps_eta': [44, 21, 14, 8, 3, 1],
                   'steps_phi': [8, 17, 24, 45, 120, 360],
                   'steps_eta': [8, 17, 25, 43, 114, 340],
-                  'sizes': [92, 92, 92, 92, 92, 92],
+                  'sizes': [46, 46, 46, 46, 46, 46],
                   'clip': False}
         self.priors = Variable(self.priorbox.apply(config))
         self.L2Norm = L2Norm(256, 20)
@@ -56,10 +56,8 @@ class SSD(nn.Module):
         # Add extra layers
         for k, v in enumerate(self.extras):
             x = v(x)
-            if k not in [1, 2, 4, 5, 7, 9, 10, 12, 14, 16]:
-                x = F.relu(x, inplace=True)
-                if k in [3, 8, 13, 17]:
-                    sources.append(x)
+            if k in [4, 11, 18, 24]:
+                sources.append(F.relu(x, inplace=True))
 
         # Apply multibox head to source layers
         for (x, l, c) in zip(sources, self.loc, self.conf):
@@ -96,7 +94,12 @@ class SSD(nn.Module):
 
 def vgg(in_channels, conv, acti):
     layers = []
-    for v in [32, 32, 'M', 64, 64, 'M', 128, 128, 128, 'M', 256, 256, 256,
+    layers += [nn.Conv2d(in_channels, 32, kernel_size=3, padding=1),
+               nn.BatchNorm2d(32),
+               acti(32)]
+    in_channels = 32
+
+    for v in [32, 'M', 64, 64, 'M', 128, 128, 128, 'M', 256, 256, 256,
               'M', 256, 256, 256]:
         if v == 'M':
             layers += [nn.MaxPool2d(kernel_size=2, stride=2, padding=1)]
@@ -105,6 +108,7 @@ def vgg(in_channels, conv, acti):
                        nn.BatchNorm2d(v),
                        acti(v)]
             in_channels = v
+
     layers += [nn.MaxPool2d(kernel_size=3, stride=1, padding=1),
                conv(in_channels, 512, kernel_size=3),
                nn.BatchNorm2d(512),
@@ -115,24 +119,31 @@ def vgg(in_channels, conv, acti):
     return layers
 
 
-def extra_layers(conv):
+def extra_layers(conv, acti):
     return [conv(512, 128, kernel_size=1, padding=1),
             nn.BatchNorm2d(128),
+            acti(128),
             nn.MaxPool2d(kernel_size=2, stride=2, padding=1),
             conv(128, 256, kernel_size=1, padding=1),
             nn.BatchNorm2d(256),
+            acti(256),
             nn.MaxPool2d(kernel_size=2, stride=2, padding=1),
             conv(256, 64, kernel_size=1),
             nn.BatchNorm2d(64),
+            acti(64),
             conv(64, 128, kernel_size=3, stride=1, padding=1),
             nn.BatchNorm2d(128),
+            acti(128),
             nn.MaxPool2d(kernel_size=2, stride=2, padding=1),
             conv(128, 64, kernel_size=1),
             nn.BatchNorm2d(64),
+            acti(64),
             conv(64, 128, kernel_size=3),
             nn.BatchNorm2d(128),
+            acti(128),
             conv(128, 64, kernel_size=1),
             nn.BatchNorm2d(64),
+            acti(64),
             conv(64, 128, kernel_size=3)]
 
 
@@ -141,7 +152,7 @@ def multibox(base, extras, num_mbox, num_classes, conv):
     conf = []
 
     base_sources = [27, 47]
-    extra_sources = [3, 8, 13, 17]
+    extra_sources = [4, 11, 18, 24]
 
     for k, v in enumerate(base_sources):
         loc += [conv(base[v].out_channels, num_mbox * 4,
@@ -171,7 +182,7 @@ def build_ssd(phase, num_classes=5, qtype='full', num_mbox=1, in_channels=2):
         acti = nn.PReLU
 
     base = vgg(in_channels, conv, acti)
-    extras = extra_layers(conv)
+    extras = extra_layers(conv, acti)
     head = multibox(base, extras, num_mbox, num_classes, nn.Conv2d)
 
     return SSD(phase, base, extras, head, num_classes)
