@@ -5,20 +5,22 @@ import simplejson as json
 import torch
 import torch.nn as nn
 
+from matplotlib.lines import Line2D
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 from ssd.layers import *
 
 
 class Plotting():
 
-    def __init__(self, save_path, ref_recall=0.3):
+    def __init__(self, save_dir='./plots', ref_recall=0.3):
 
-        self.save_path = save_path
-        self.line_styles = [(0, ()), (0, (5, 2)), (0, (2, 2))]
+        self.save_dir = save_dir
+        self.line_styles = [(0, ()), (0, (2, 2))]
         self.legend = ['Full Precision Network', 'Ternary Weight Network']
+        self.loc_legend = [r'$\mu$', r'$\mu_{1/2}$']
         self.ref_recall = ref_recall
 
-        plt.style.use('plots/ssdjet.mplstyle')
+        plt.style.use('./plots/ssdjet.mplstyle')
         matplotlib.rcParams["figure.figsize"] = (8.0, 6.0)
 
         with open('./data/palette.json') as json_file:
@@ -26,6 +28,11 @@ class Plotting():
         self.colors = [self.color_palette['indigo'],
                        self.color_palette['red'],
                        self.color_palette['green']]
+        self.markers = ["v", "D"]
+
+    def get_logo(self):
+        return OffsetImage(plt.imread('./plots/hls4mllogo.jpg', format='jpg'),
+                           zoom=0.08)
 
     def draw_loss(self, data_train, data_val, keys):
         """Plots the training and validation loss"""
@@ -52,7 +59,7 @@ class Plotting():
                 color=self.color_palette['grey']['shade_900'],
                 fontsize=13)
 
-        fig.savefig(self.save_path)
+        fig.savefig('%s/loss.png' % self.save_dir)
         plt.close(fig)
 
     def draw_precision_recall(self, data):
@@ -71,7 +78,7 @@ class Plotting():
                     precision[(np.abs(recall - self.ref_recall)).argmin()], 2)
                 ref_precisions.append(ref_precision)
                 ax.plot([0, 0.3], [ref_precision, ref_precision],
-                        linestyle=self.line_styles[2],
+                        linestyle=self.line_styles[1],
                         linewidth=0.8,
                         alpha=0.5,
                         color=self.color_palette['grey']['shade_500'])
@@ -88,7 +95,7 @@ class Plotting():
         plt.xticks(list(plt.xticks()[0]) + [self.ref_recall])
         plt.yticks([0, 1] + ref_precisions)
         ax.plot([0.3, 0.3], [0, np.max(ref_precisions)],
-                linestyle=self.line_styles[2],
+                linestyle=self.line_styles[1],
                 alpha=0.5,
                 color=self.color_palette['grey']['shade_500'])
 
@@ -100,13 +107,94 @@ class Plotting():
                 color=self.color_palette['grey']['shade_900'],
                 fontsize=13)
 
-        logo = OffsetImage(plt.imread('./plots/hls4mllogo.jpg', format='jpg'),
-                           zoom=0.08)
-        ab = AnnotationBbox(logo, [0, 1], xybox=(0.12, 1.085), frameon=False)
+        ab = AnnotationBbox(self.get_logo(), [0, 1], xybox=(0.12, 1.085),
+                            frameon=False)
         ax.add_artist(ab)
 
-        fig.savefig(self.save_path)
+        fig.savefig('%s/pr_curve.png' % self.save_dir)
         plt.close(fig)
+
+    def draw_loc_delta(self, data, classes, width=[.1, .05, .03], nbins=15):
+        """Plots the localization delta in eta and phi"""
+
+        def get_width(p, w):
+            return 10**(np.log10(p)+w/2.)-10**(np.log10(p)-w/2.)
+
+        def get_line(x, shade, q, c, median):
+            label = '{0}: {1} jets, {2}'.format(self.legend[q], c,
+                                                self.loc_legend[median])
+            if median:
+                return Line2D([0], [0], color=self.colors[x][shade],
+                              linestyle=self.line_styles[q], label=label,
+                              marker=self.markers[q], lw=0, markersize=4)
+            else:
+                return Line2D([0], [0], color=self.colors[x][shade],
+                              label=label, linestyle=self.line_styles[q])
+
+        for x, (c, w) in enumerate(zip(classes, width)):
+
+            for column, label in [(2, 'eta'), (3, 'phi')]:
+
+                fig, ax = plt.subplots()
+                cst_lgd = []
+                plt.xlabel('$p_T$ [GeV]', horizontalalignment='right', x=1.0)
+                plt.ylabel(r'$\sigma(\%s_{SSD}-\%s_{GT})$' % (label, label),
+                           horizontalalignment='right', y=1.0)
+
+                for q, d in enumerate(data):
+                    shade = 'shade_800' if q else 'shade_200'
+                    color = self.colors[x][shade]
+                    bins, cls = [], d[d[:, 0] == x]
+
+                    if not q:
+                        min_pt, max_pt = np.min(cls[:, 1]), np.max(cls[:, 1])
+                        binning = np.logspace(np.log10(min_pt),
+                                              np.log10(max_pt), nbins)[1:]
+
+                    bmin = 0
+                    for bmax in binning:
+                        b = cls[(cls[:, 1] > bmin) & (cls[:, 1] <= bmax)]
+                        bins.append(np.abs(b[:, column]))
+                        bmin = bmax
+                    cst_lgd.append(get_line(x, shade, q, c, 0))
+                    cst_lgd.append(get_line(x, shade, q, c, 1))
+
+                    ax.boxplot(bins,
+                               positions=binning,
+                               widths=get_width(binning, w),
+                               medianprops=dict(linestyle=self.line_styles[q],
+                                                color=color),
+                               meanprops=dict(marker=self.markers[q],
+                                              markeredgecolor=color,
+                                              markerfacecolor=color,
+                                              markersize=4),
+                               sym='',
+                               showmeans=True,
+                               showbox=False,
+                               showcaps=False,
+                               meanline=False,
+                               showfliers=False,
+                               whis=0.0)
+
+                ax.set_xscale("log")
+                ax.annotate('CMS',
+                            xy=(ax.get_xlim()[0], ax.get_ylim()[1]),
+                            transform=ax.transAxes,
+                            horizontalalignment='left',
+                            color=self.color_palette['grey']['shade_900'],
+                            fontsize=13,
+                            weight='bold')
+
+                ab = AnnotationBbox(self.get_logo(),
+                                    xy=(ax.get_xlim()[0], ax.get_ylim()[1]),
+                                    box_alignment=(-0.5, 0.3),
+                                    frameon=False)
+                ax.add_artist(ab)
+                ax.legend(handles=cst_lgd, loc='upper left',
+                          bbox_to_anchor=(0, -0.1))
+
+                fig.savefig('%s/loc_%s_%s.png' % (self.save_dir, c, label))
+                plt.close(fig)
 
 
 class GetResources():

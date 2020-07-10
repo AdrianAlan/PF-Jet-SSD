@@ -67,7 +67,7 @@ def execute(model_name, qtype, train_dataset_path, val_dataset_path, save_dir,
 
     num_classes += 1
     quantized = (qtype == 'binary') or (qtype == 'ternary')
-    plot = Plotting(save_path='%s/%s-loss.png' % (save_dir, model_name))
+    plot = Plotting(save_dir=save_dir)
 
     # Initialize dataset
     train_loader, h5t = get_data_loader(train_dataset_path, batch_size,
