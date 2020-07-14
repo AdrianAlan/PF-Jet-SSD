@@ -102,14 +102,14 @@ def vgg(in_channels, conv, acti):
     for v in [32, 'M', 64, 64, 'M', 128, 128, 128, 'M', 256, 256, 256,
               'M', 256, 256, 256]:
         if v == 'M':
-            layers += [nn.MaxPool2d(kernel_size=2, stride=2, padding=1)]
+            layers += [nn.AvgPool2d(kernel_size=2, stride=2, padding=1)]
         else:
             layers += [conv(in_channels, v, kernel_size=3, padding=1),
                        nn.BatchNorm2d(v),
                        acti(v)]
             in_channels = v
 
-    layers += [nn.MaxPool2d(kernel_size=3, stride=1, padding=1),
+    layers += [nn.AvgPool2d(kernel_size=3, stride=1, padding=1),
                conv(in_channels, 512, kernel_size=3),
                nn.BatchNorm2d(512),
                acti(512),
@@ -123,18 +123,18 @@ def extra_layers(conv, acti):
     return [conv(512, 128, kernel_size=1, padding=1),
             nn.BatchNorm2d(128),
             acti(128),
-            nn.MaxPool2d(kernel_size=2, stride=2, padding=1),
+            nn.AvgPool2d(kernel_size=2, stride=2, padding=1),
             conv(128, 256, kernel_size=1, padding=1),
             nn.BatchNorm2d(256),
             acti(256),
-            nn.MaxPool2d(kernel_size=2, stride=2, padding=1),
+            nn.AvgPool2d(kernel_size=2, stride=2, padding=1),
             conv(256, 64, kernel_size=1),
             nn.BatchNorm2d(64),
             acti(64),
             conv(64, 128, kernel_size=3, stride=1, padding=1),
             nn.BatchNorm2d(128),
             acti(128),
-            nn.MaxPool2d(kernel_size=2, stride=2, padding=1),
+            nn.AvgPool2d(kernel_size=2, stride=2, padding=1),
             conv(128, 64, kernel_size=1),
             nn.BatchNorm2d(64),
             acti(64),
