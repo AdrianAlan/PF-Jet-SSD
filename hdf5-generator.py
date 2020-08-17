@@ -23,9 +23,6 @@ class PhysicsConstants():
         # Define radius of a jet
         self.delta_r = {'b': 0.4, 'q': 0.4, 't': 0.8, 'W': 0.8, 'h': 0.8}
 
-        # Crystal dimentions
-        self.crystal_dim = 0.0174
-
         # Assigned jet classes
         self.classes = {'b': 1, 'q': 5, 't': 4, 'W': 3, 'h': 2}
 
@@ -35,10 +32,6 @@ class PhysicsConstants():
 
     def get_class(self, jtype):
         return self.classes[jtype]
-
-    # Width of Jets,
-    def get_radius_in_pixels(self, jtype):
-        return np.ceil(self.delta_r[jtype] / self.crystal_dim).astype(int)
 
     # Minimum detecable Pt
     def get_minimum_pt(self, jtype):
@@ -79,7 +72,6 @@ class HDF5Generator:
         self.constants = PhysicsConstants(example_file)
 
         self.jtype = jtype
-        self.radius = self.constants.get_radius_in_pixels(jtype)
         self.minpt = self.constants.get_minimum_pt(jtype)
         self.edges_eta_ecal = self.constants.get_edges_ecal(edge_index=0,
                                                             tower='Tower.Eem')
@@ -161,6 +153,7 @@ class HDF5Generator:
             bbox_pt_full_file = genjet['GenJet.PT'].array()  # Jet PT
             bbox_eta_full_file = genjet['GenJet.Eta'].array()  # Jet x
             bbox_phi_full_file = genjet['GenJet.Phi'].array()  # Jet y
+            bbox_mass_full_file = genjet['GenJet.Mass'].array()  # Jet mass
 
             for event_number in np.arange(events[0], events[1], dtype=int):
 
@@ -174,8 +167,10 @@ class HDF5Generator:
                 bbox_etas = bbox_etas[etas_mask]
                 bbox_phis = bbox_phis[etas_mask]
                 bbox_pts = bbox_pt_full_file[event_number][etas_mask]
+                bbox_mass = bbox_mass_full_file[event_number][etas_mask]
 
-                labels = self.get_bboxes(bbox_pts, bbox_etas, bbox_phis)
+                labels = self.get_bboxes(bbox_pts, bbox_etas, bbox_phis,
+                                         bbox_mass)
 
                 # Get ECAL info
                 ecal_mask = ecal_energy_full_file[event_number] > 0
@@ -229,22 +224,15 @@ class HDF5Generator:
 
         hdf5_dataset.close()
 
-    def get_bboxes(self, bbox_pts, bbox_etas, bbox_phis):
+    def get_bboxes(self, bbox_pts, bbox_etas, bbox_phis, bbox_mass):
 
         labels = []
 
-        for pt, eta, phi in zip(bbox_pts, bbox_etas, bbox_phis):
-
+        for pt, eta, phi, m in zip(bbox_pts, bbox_etas, bbox_phis, bbox_mass):
             if pt > self.minpt:
-                index_phi = np.argmax(self.edges_phi_ecal >= phi) - 1
-                index_eta = np.argmax(self.edges_eta_ecal >= eta) - 1
-
-                xmin = int(index_eta-self.radius)
-                xmax = int(index_eta+self.radius)
-                ymin = int(index_phi-self.radius)
-                ymax = int(index_phi+self.radius)
-
-                labels.append([self.unique_label, xmin, ymin, xmax, ymax, pt])
+                e = np.argmax(self.edges_eta_ecal >= eta) - 1
+                p = np.argmax(self.edges_phi_ecal >= phi) - 1
+                labels.append([self.unique_label, e, p, pt, m])
 
         return np.asarray(labels)
 
