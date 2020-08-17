@@ -24,7 +24,7 @@ class PhysicsConstants():
         self.delta_r = {'b': 0.4, 'q': 0.4, 't': 0.8, 'W': 0.8, 'h': 0.8}
 
         # Assigned jet classes
-        self.classes = {'b': 1, 'q': 5, 't': 4, 'W': 3, 'h': 2}
+        self.classes = {'b': 0, 'q': 3, 't': 2, 'W': 1, 'h': 1}
 
         self.example_file = example_file
         self.min_eta = -3
