@@ -226,7 +226,7 @@ if __name__ == '__main__':
                         help='Path to validation dataset')
     parser.add_argument('-s', '--save-dir', type=str, default='./models',
                         help='Path to save directory', dest='save_dir')
-    parser.add_argument('-c', '--classes', type=int, default=1,
+    parser.add_argument('-c', '--classes', type=int, default=3,
                         help='Number of target classes', dest='num_classes')
     parser.add_argument('-w', '--workers', type=int, default=1,
                         help='Number of workers', dest='num_workers')

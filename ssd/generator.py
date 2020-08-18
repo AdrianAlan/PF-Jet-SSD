@@ -28,33 +28,19 @@ class CalorimeterJetDataset(torch.utils.data.Dataset):
         self.dataset_size = len(self.labels)
 
     def process_labels(self, labels_raw):
-        label_reshaped = labels_raw.reshape(-1, 6)  # Reshape labels
-        if self.return_pt:
-            label_reshaped = label_reshaped[:, [1, 2, 3, 4, 0, 5]]
-        else:
-            label_reshaped = label_reshaped[:, :-1]  # Remove PT
-            label_reshaped = label_reshaped[:, [1, 2, 3, 4, 0]]  # Class last
+        labels_reshaped = labels_raw.reshape(-1, 5)
+        labels = torch.empty(labels_reshaped.shape[0], 5, dtype=torch.float32)
 
         # Set fractional coordinates
-        centers = (label_reshaped[:, 0] + label_reshaped[:, 2]) / 2
-        label_reshaped[:, 0] = centers - 23
-        label_reshaped[:, 2] = centers + 23
-        centers = (label_reshaped[:, 1] + label_reshaped[:, 3]) / 2
-        label_reshaped[:, 1] = centers - 23
-        label_reshaped[:, 3] = centers + 23
+        labels[:, 0] = (labels_reshaped[:, 1] - 23) / float(self.width)
+        labels[:, 1] = (labels_reshaped[:, 2] - 23) / float(self.height)
+        labels[:, 2] = (labels_reshaped[:, 1] + 23) / float(self.width)
+        labels[:, 3] = (labels_reshaped[:, 2] + 23) / float(self.height)
 
-        label_reshaped[:, 0] = label_reshaped[:, 0] / float(self.width)
-        label_reshaped[:, 2] = label_reshaped[:, 2] / float(self.width)
-        label_reshaped[:, 1] = label_reshaped[:, 1] / float(self.height)
-        label_reshaped[:, 3] = label_reshaped[:, 3] / float(self.height)
+        # Set class label
+        labels[:, 4] = labels_reshaped[:, 0]
 
-        # label: b 0, H+W 1, t 2
-        label_reshaped[:, 4][label_reshaped[:, 4] == 1] = 0.
-        label_reshaped[:, 4][label_reshaped[:, 4] == 2] = 1.
-        label_reshaped[:, 4][label_reshaped[:, 4] == 3] = 1.
-        label_reshaped[:, 4][label_reshaped[:, 4] == 4] = 2.
-
-        return label_reshaped
+        return labels
 
     def process_images(self,
                        indices_ecal_phi, indices_hcal_phi,
