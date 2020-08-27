@@ -210,7 +210,8 @@ def execute(model_name, qtype, train_dataset_path, val_dataset_path, save_dir,
 
         plot.draw_loss([train_loss, train_loss_l, train_loss_c, train_loss_r],
                        [val_loss, val_loss_l, val_loss_c, val_loss_r],
-                       ['Full', 'Localization', 'Classification', 'Regression'])
+                       ['Full', 'Localization', 'Classification', 'Regression'],
+                       type=qtype)
 
         if cp_es(av_val_loss, ssd_net):
             break

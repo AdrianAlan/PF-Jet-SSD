@@ -35,7 +35,7 @@ class Plotting():
         return OffsetImage(plt.imread('./plots/hls4mllogo.jpg', format='jpg'),
                            zoom=0.08)
 
-    def draw_loss(self, data_train, data_val, keys):
+    def draw_loss(self, data_train, data_val, keys, type='full'):
         """Plots the training and validation loss"""
 
         fig, ax = plt.subplots()
@@ -60,7 +60,7 @@ class Plotting():
                 color=self.color_palette['grey']['shade_900'],
                 fontsize=13)
 
-        fig.savefig('%s/loss.png' % self.save_dir)
+        fig.savefig('%s/loss-%s' % (self.save_dir, type))
         plt.close(fig)
 
     def draw_precision_recall(self, data):
@@ -112,7 +112,7 @@ class Plotting():
                             frameon=False)
         ax.add_artist(ab)
 
-        fig.savefig('%s/pr_curve.png' % self.save_dir)
+        fig.savefig('%s/pr-curve' % self.save_dir)
         plt.close(fig)
 
     def draw_loc_delta(self, data, classes, labels=['eta', 'phi', 'mass'],
@@ -197,8 +197,8 @@ class Plotting():
                 ax.legend(handles=cst_lgd, loc='upper left',
                           bbox_to_anchor=(0, -0.1))
 
-                fig.savefig('%s/delta_%s_%s.png' % (self.save_dir, c,
-                                                    labels[column]))
+                fig.savefig('%s/delta-%s-%s' % (self.save_dir, c,
+                                                labels[column]))
                 plt.close(fig)
 
 
