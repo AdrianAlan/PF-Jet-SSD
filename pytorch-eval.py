@@ -174,7 +174,7 @@ if __name__ == '__main__':
     dir_plot = args.out_plot_dir
     num_classes = args.num_classes
     jet_classes = ['b', 'H-W', 't']
-    im_size = (360, 340)
+    im_size = (340, 360)
     top_k = 10
     num_classes = num_classes + 1  # +1 for background
 
