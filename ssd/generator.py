@@ -27,9 +27,9 @@ class CalorimeterJetDataset(torch.utils.data.Dataset):
 
         self.dataset_size = len(self.labels)
 
-    def process_labels(self, labels_raw):
+    def process_labels(self, labels_raw, scaler_mass):
         labels_reshaped = labels_raw.reshape(-1, 5)
-        labels = torch.empty(labels_reshaped.shape[0], 5, dtype=torch.float32)
+        labels = torch.empty_like(labels_reshaped, dtype=torch.float32)
 
         # Set fractional coordinates
         labels[:, 0] = (labels_reshaped[:, 1] - 23) / float(self.width)
@@ -40,6 +40,13 @@ class CalorimeterJetDataset(torch.utils.data.Dataset):
         # Set class label
         labels[:, 4] = labels_reshaped[:, 0]
 
+        # Concatinate auxilary labels
+        labels_reshaped[:, 4] = labels_reshaped[:, 4] / scaler_mass
+        labels = torch.cat((labels, labels_reshaped[:, 4].unsqueeze(1)), 1)
+
+        if self.return_pt:
+            labels = torch.cat((labels, labels_reshaped[:, 3].unsqueeze(1)), 1)
+
         return labels
 
     def process_images(self,
@@ -47,8 +54,11 @@ class CalorimeterJetDataset(torch.utils.data.Dataset):
                        indices_ecal_eta, indices_hcal_eta,
                        ecal_energy, hcal_energy):
 
-        ecal_energy = ecal_energy / np.max(ecal_energy)
-        hcal_energy = hcal_energy / np.max(hcal_energy)
+        ecal_max = np.max(ecal_energy)
+        hcal_max = np.max(hcal_energy)
+
+        ecal_energy = ecal_energy / ecal_max
+        hcal_energy = hcal_energy / hcal_max
 
         indices_channels = np.append(np.zeros(len(indices_ecal_phi)),
                                      np.ones(len(indices_hcal_phi)))
@@ -63,7 +73,7 @@ class CalorimeterJetDataset(torch.utils.data.Dataset):
                                                       self.height,
                                                       self.width]))
 
-        return pixels.to_dense()
+        return pixels.to_dense(), ecal_max, hcal_max
 
     def __getitem__(self, index):
 
@@ -71,11 +81,6 @@ class CalorimeterJetDataset(torch.utils.data.Dataset):
         repeat = True
 
         while repeat:
-
-            # Set labels
-            labels_raw = np.asarray([self.labels[index]], dtype=np.float32)
-            labels_raw = torch.FloatTensor(labels_raw)
-            labels_processed = self.process_labels(labels_raw)
 
             # Load calorimeter
             indices_ecal_phi = np.asarray(self.ecal_phi[index], dtype=np.int16)
@@ -86,12 +91,17 @@ class CalorimeterJetDataset(torch.utils.data.Dataset):
             indices_hcal_eta = np.asarray(self.hcal_eta[index], dtype=np.int16)
             hcal_energy = np.asarray(self.hcal_energy[index], dtype=np.float32)
 
-            calorimeter = self.process_images(indices_ecal_phi,
-                                              indices_hcal_phi,
-                                              indices_ecal_eta,
-                                              indices_hcal_eta,
-                                              ecal_energy,
-                                              hcal_energy)
+            calorimeter, e_max, h_max = self.process_images(indices_ecal_phi,
+                                                            indices_hcal_phi,
+                                                            indices_ecal_eta,
+                                                            indices_hcal_eta,
+                                                            ecal_energy,
+                                                            hcal_energy)
+
+            # Set labels
+            labels_raw = np.asarray([self.labels[index]], dtype=np.float32)
+            labels_raw = torch.FloatTensor(labels_raw)
+            labels_processed = self.process_labels(labels_raw, e_max+h_max)
 
             if labels_processed.shape[0]:
                 repeat = False

@@ -12,7 +12,7 @@ class Detect(Function):
     """
 
     @staticmethod
-    def forward(ctx, loc_data, conf_data, prior_data,
+    def forward(ctx, loc_data, conf_data, regr_data, prior_data,
                 num_classes, top_k, conf_thresh, nms_thresh):
         """
         Args:
@@ -26,7 +26,7 @@ class Detect(Function):
         variance = [.1, .2]
         batch_size = loc_data.size(0)
         num_priors = prior_data.size(0)
-        output = torch.zeros(batch_size, num_classes, top_k, 5)
+        output = torch.zeros(batch_size, num_classes, top_k, 6)
         conf_preds = conf_data.view(batch_size,
                                     num_priors,
                                     num_classes).transpose(2, 1)
@@ -37,6 +37,7 @@ class Detect(Function):
 
             # For each class, perform nms
             conf_scores = conf_preds[i].clone()
+            regr_scores = regr_data[i].clone()
             for cl in range(1, num_classes):
                 c_mask = conf_scores[cl].gt(conf_thresh)
                 scores = conf_scores[cl][c_mask]
@@ -44,9 +45,13 @@ class Detect(Function):
                     continue
                 l_mask = c_mask.unsqueeze(1).expand_as(decoded_boxes)
                 boxes = decoded_boxes[l_mask].view(-1, 4)
+                r_mask = c_mask.unsqueeze(1).expand_as(regr_scores)
+                regres = regr_scores[r_mask].view(-1, 1)
                 # idx of highest scoring and non-overlapping boxes per class
                 ids, count = nms(boxes, scores, nms_thresh, top_k)
                 output[i, cl, :count] = \
                     torch.cat((scores[ids[:count]].unsqueeze(1),
-                               boxes[ids[:count]]), 1)
+                               boxes[ids[:count]],
+                               regres[ids[:count]]), 1)
+
         return output

@@ -39,15 +39,16 @@ class MultiBoxLoss(nn.Module):
         """Multibox Loss
         Args:
             predictions (tuple): A tuple containing loc preds, conf preds,
-            and prior boxes from SSD net.
+            regr_preds and prior boxes from SSD net.
                 conf shape: torch.size(batch_size,num_priors,num_classes)
                 loc shape: torch.size(batch_size,num_priors,4)
+                regr shape: torch.size(batch_size,num_priors,1)
                 priors shape: torch.size(num_priors,4)
 
             targets (tensor): Ground truth boxes and labels for a batch,
-                shape: [batch_size,num_objs,5] (last idx is the label).
+                shape: [batch_size,num_objs,6].
         """
-        loc_data, conf_data, priors = predictions
+        loc_data, conf_data, regr_data, priors = predictions
         num = loc_data.size(0)
         priors = priors[:loc_data.size(1), :]
         num_priors = (priors.size(0))
@@ -56,18 +57,22 @@ class MultiBoxLoss(nn.Module):
         # match priors (default boxes) and ground truth boxes
         loc_t = torch.Tensor(num, num_priors, 4)
         conf_t = torch.LongTensor(num, num_priors)
+        regr_t = torch.Tensor(num, num_priors, 1)
         for idx in range(num):
-            truths = targets[idx][:, :-1].data
-            labels = targets[idx][:, -1].data
+            truths = targets[idx][:, :4].data
+            labels = targets[idx][:, 4].data
+            regres = targets[idx][:, 5].data
             defaults = priors.data
             match(self.threshold, truths, defaults, self.variance, labels,
-                  loc_t, conf_t, idx)
+                  regres, loc_t, conf_t, regr_t, idx)
         if self.use_gpu:
             loc_t = loc_t.cuda()
             conf_t = conf_t.cuda()
+            regr_t = regr_t.cuda()
         # wrap targets
         loc_t = Variable(loc_t, requires_grad=False)
         conf_t = Variable(conf_t, requires_grad=False)
+        regr_t = Variable(regr_t, requires_grad=False)
 
         pos = conf_t > 0
         num_pos = pos.sum(dim=1, keepdim=True)
@@ -99,10 +104,15 @@ class MultiBoxLoss(nn.Module):
         targets_weighted = conf_t[(pos+neg).gt(0)]
         loss_c = F.cross_entropy(conf_p, targets_weighted, reduction='sum')
 
-        # Sum of losses: L(x,c,l,g) = (Lconf(x, c) + αLloc(x,l,g)) / N
-        N = num_pos.data.sum().double()
-        loss_l = loss_l.double()
-        locc_c = loss_c.double()
+        # Compute regression loss
+        pos_idx = pos.unsqueeze(pos.dim()).expand_as(regr_data)
+        regr_p = regr_data[pos_idx].view(-1, 1)
+        regr_t = regr_t[pos_idx].view(-1, 1)
+        loss_r = F.smooth_l1_loss(regr_p, regr_t, reduction='sum')
+
+        # Final losses
+        N = num_pos.data.sum().float()
         loss_l /= N
         loss_c /= N
-        return loss_l, loss_c
+        loss_r /= N
+        return loss_l, loss_c, loss_r

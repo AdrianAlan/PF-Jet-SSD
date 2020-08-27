@@ -27,7 +27,8 @@ class Plotting():
             self.color_palette = json.load(json_file)
         self.colors = [self.color_palette['indigo'],
                        self.color_palette['red'],
-                       self.color_palette['green']]
+                       self.color_palette['green'],
+                       self.color_palette['yellow']]
         self.markers = ["v", "D"]
 
     def get_logo(self):
@@ -114,7 +115,8 @@ class Plotting():
         fig.savefig('%s/pr_curve.png' % self.save_dir)
         plt.close(fig)
 
-    def draw_loc_delta(self, data, classes, width=[.1, .05, .03], nbins=15):
+    def draw_loc_delta(self, data, classes, labels=['eta', 'phi', 'mass'],
+                       width=[.1, .05, .03], nbins=15):
         """Plots the localization delta in eta and phi"""
 
         def get_width(p, w):
@@ -133,13 +135,14 @@ class Plotting():
 
         for x, (c, w) in enumerate(zip(classes, width)):
 
-            for column, label in [(2, 'eta'), (3, 'phi')]:
+            for column, label in [(2, r'$\sigma(\eta_{SSD}-\eta_{GT})$'),
+                                  (3, r'$\sigma(\phi_{SSD}-\phi_{GT})$'),
+                                  (4, r'$\frac{|m_{SSD}-m_{GT}|}{m_{GT}}$')]:
 
                 fig, ax = plt.subplots()
                 cst_lgd = []
                 plt.xlabel('$p_T$ [GeV]', horizontalalignment='right', x=1.0)
-                plt.ylabel(r'$\sigma(\%s_{SSD}-\%s_{GT})$' % (label, label),
-                           horizontalalignment='right', y=1.0)
+                plt.ylabel(label, horizontalalignment='right', y=1.0)
 
                 for q, d in enumerate(data):
                     shade = 'shade_800' if q else 'shade_200'
@@ -170,11 +173,12 @@ class Plotting():
                                               markersize=4),
                                sym='',
                                showmeans=True,
+                               notch=False,
                                showbox=False,
                                showcaps=False,
                                meanline=False,
                                showfliers=False,
-                               whis=0.0)
+                               whis=0)
 
                 ax.set_xscale("log")
                 ax.annotate('CMS',
@@ -193,7 +197,8 @@ class Plotting():
                 ax.legend(handles=cst_lgd, loc='upper left',
                           bbox_to_anchor=(0, -0.1))
 
-                fig.savefig('%s/loc_%s_%s.png' % (self.save_dir, c, label))
+                fig.savefig('%s/delta_%s_%s.png' % (self.save_dir, c,
+                                                    labels[column]))
                 plt.close(fig)
 
 

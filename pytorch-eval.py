@@ -26,11 +26,10 @@ def get_data_loader(source_path, batch_size, num_workers, shuffle=False):
                                        num_workers=num_workers), h5
 
 
-def test_net(model, dataset, top_k=200, im_size=(300, 300),
-             conf_threshold=0.05, overlap_threshold=0.1, jet_classes=[]):
-
+def test_net(model, dataset, im_size, top_k=200, conf_threshold=0.05,
+             overlap_threshold=0.1, jet_classes=[], epsilon=10**-6):
     results = len(jet_classes)*[np.empty((0, 2))]
-    deltas = np.empty((0, 4))
+    deltas = np.empty((0, 5))
     inf_time = []
 
     with torch.no_grad():
@@ -50,7 +49,7 @@ def test_net(model, dataset, top_k=200, im_size=(300, 300),
             targets[:, 1] *= im_size[1]
             targets[:, 3] *= im_size[1]
 
-            all_detections = np.empty((0, 7))
+            all_detections = np.empty((0, 8))
             for j in range(1, detections.size(1)):
                 dets = detections[0, j, :]
 
@@ -60,7 +59,7 @@ def test_net(model, dataset, top_k=200, im_size=(300, 300),
                 if dets.size(0) == 0:
                     continue
 
-                boxes = dets[:, 1:]
+                boxes = dets[:, 1:5]
                 boxes[:, 0] *= im_size[0]
                 boxes[:, 2] *= im_size[0]
                 boxes[:, 1] *= im_size[1]
@@ -68,18 +67,20 @@ def test_net(model, dataset, top_k=200, im_size=(300, 300),
 
                 scores = dets[:, 0].cpu().numpy()
                 labels = np.array([j-1]*len(scores))
+                regres = dets[:, -1].cpu().numpy()
 
-                # Detection format: [xmin, ymin, xmax, ymax, label, score, gt]
+                # Format: [xmin, ymin, xmax, ymax, label, score, gt, m]
                 class_det = np.hstack((boxes.cpu().numpy(),
                                        labels[:, np.newaxis],
                                        scores[:, np.newaxis],
-                                       np.zeros(len(boxes))[:, np.newaxis])
+                                       np.zeros(len(boxes))[:, np.newaxis],
+                                       regres[:, np.newaxis])
                                       ).astype(np.float32, copy=False)
 
                 all_detections = np.vstack((all_detections, class_det))
 
             # Sort by confidence
-            all_detections = all_detections[(-all_detections[:, -2]).argsort()]
+            all_detections = all_detections[(-all_detections[:, 5]).argsort()]
 
             # Select top k predictions
             all_detections = all_detections[:top_k]
@@ -113,14 +114,15 @@ def test_net(model, dataset, top_k=200, im_size=(300, 300),
                                      (d[0]+(d[2]-d[0])/2))/115
                             d_phi = ((t[1]+(t[3]-t[1])/2) -
                                      (d[1]+(d[3]-d[1])/2))/115
+                            d_mass = np.abs(t[5] - d[7]) / (t[5] + epsilon)
                             deltas = np.vstack((deltas,
-                                                [t[4], t[5], d_eta, d_phi]))
-
+                                               [t[4], t[6], d_eta, d_phi,
+                                                d_mass]))
                             break
 
                 if not detected:
-                    fn = np.hstack((t[:-1], [0, 1])).astype(np.float32,
-                                                            copy=False)
+                    fn = np.hstack((t[:5], [0, 1, 1])).astype(np.float32,
+                                                              copy=False)
                     all_detections = np.vstack((all_detections, fn))
 
             for c in range(len(jet_classes)):
@@ -132,7 +134,6 @@ def test_net(model, dataset, top_k=200, im_size=(300, 300),
         progress_bar.close()
 
         it = 1000*np.mean(inf_time)
-
         ret = []
         for c in range(len(jet_classes)):
             p, r, _ = precision_recall_curve(results[c][:, 0],

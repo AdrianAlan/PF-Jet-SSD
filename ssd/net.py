@@ -20,6 +20,7 @@ class SSD(nn.Module):
         self.loc = nn.ModuleList(head[0])
         self.priorbox = PriorBox()
         self.conf = nn.ModuleList(head[1])
+        self.regr = nn.ModuleList(head[2])
         self.num_classes = num_classes
         self.top_k = top_k
         self.min_confidence = min_confidence
@@ -41,9 +42,7 @@ class SSD(nn.Module):
     def forward(self, x):
         """Applies network layers and ops on input images x"""
 
-        sources = list()
-        loc = list()
-        conf = list()
+        sources, loc, conf, regr = list(), list(), list(), list()
 
         # Add base network
         for k in range(33):
@@ -60,17 +59,20 @@ class SSD(nn.Module):
                 sources.append(F.relu(x, inplace=True))
 
         # Apply multibox head to source layers
-        for (x, l, c) in zip(sources, self.loc, self.conf):
+        for (x, l, c, r) in zip(sources, self.loc, self.conf, self.regr):
             loc.append(l(x).permute(0, 2, 3, 1).contiguous())
             conf.append(c(x).permute(0, 2, 3, 1).contiguous())
+            regr.append(r(x).permute(0, 2, 3, 1).contiguous())
         loc = torch.cat([o.view(o.size(0), -1) for o in loc], 1)
         conf = torch.cat([o.view(o.size(0), -1) for o in conf], 1)
+        regr = torch.cat([o.view(o.size(0), -1) for o in regr], 1)
 
         # Apply correct output layer
         if self.phase == "test":
             output = self.detect.apply(
                 loc.view(loc.size(0), -1, 4),
                 self.softmax(conf.view(conf.size(0), -1, self.num_classes)),
+                regr.view(regr.size(0), -1, 1),
                 self.priors.type(type(x.data)),
                 self.num_classes,
                 self.top_k,
@@ -80,6 +82,7 @@ class SSD(nn.Module):
             output = (
                 loc.view(loc.size(0), -1, 4),
                 conf.view(conf.size(0), -1, self.num_classes),
+                regr.view(regr.size(0), -1, 1),
                 self.priors)
         return output
 
@@ -148,8 +151,7 @@ def extra_layers(conv, acti):
 
 
 def multibox(base, extras, num_mbox, num_classes, conv):
-    loc = []
-    conf = []
+    loc, conf, regr = [], [], []
 
     base_sources = [27, 47]
     extra_sources = [4, 11, 18, 24]
@@ -159,14 +161,18 @@ def multibox(base, extras, num_mbox, num_classes, conv):
                 kernel_size=3, padding=1)]
         conf += [conv(base[v].out_channels, num_mbox * num_classes,
                  kernel_size=3, padding=1)]
+        regr += [conv(base[v].out_channels, num_mbox * 1,
+                 kernel_size=3, padding=1)]
 
     for k, v in enumerate(extra_sources):
         loc += [conv(extras[v].out_channels, num_mbox * 4,
                 kernel_size=3, padding=1)]
         conf += [conv(extras[v].out_channels, num_mbox * num_classes,
                  kernel_size=3, padding=1)]
+        regr += [conv(extras[v].out_channels, num_mbox * 1,
+                 kernel_size=3, padding=1)]
 
-    return (loc, conf)
+    return (loc, conf, regr)
 
 
 def build_ssd(phase, num_classes=5, qtype='full', num_mbox=1, in_channels=2):

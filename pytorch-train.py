@@ -117,8 +117,8 @@ def execute(model_name, qtype, train_dataset_path, val_dataset_path, save_dir,
     criterion = MultiBoxLoss(num_classes, overlap_threshold, 3, True)
 
     # Training
-    train_loss, train_loss_l, train_loss_c = np.empty(0), np.empty(0), np.empty(0)
-    val_loss, val_loss_l, val_loss_c = np.empty(0), np.empty(0), np.empty(0)
+    train_loss, train_loss_l, train_loss_c, train_loss_r = np.empty(0), np.empty(0), np.empty(0), np.empty(0)
+    val_loss, val_loss_l, val_loss_c, val_loss_r = np.empty(0), np.empty(0), np.empty(0), np.empty(0)
 
     for epoch in range(1, train_epochs+1):
 
@@ -129,16 +129,17 @@ def execute(model_name, qtype, train_dataset_path, val_dataset_path, save_dir,
         # Start of model training
         tr = trange(len(train_loader)*batch_size, file=sys.stdout)
         tr.set_description('Epoch {}'.format(epoch))
-        batch_loss_l, batch_loss_c = np.empty(0), np.empty(0)
+        batch_loss_l, batch_loss_c, batch_loss_r = np.empty(0), np.empty(0), np.empty(0)
         net.train()
 
         for batch_index, (images, targets) in enumerate(train_loader):
 
-            loss_l, loss_c = batch_step(images, targets, optimizer,
-                                        net, criterion)
+            loss_l, loss_c, loss_r = batch_step(images, targets, optimizer,
+                                                net, criterion)
             batch_loss_l = np.append(batch_loss_l, loss_l.item())
             batch_loss_c = np.append(batch_loss_c, loss_c.item())
-            loss = loss_l + loss_c
+            batch_loss_r = np.append(batch_loss_r, loss_r.item())
+            loss = loss_l + loss_c + loss_r
             loss.backward()
 
             if quantized:
@@ -155,17 +156,19 @@ def execute(model_name, qtype, train_dataset_path, val_dataset_path, save_dir,
 
             av_train_loss_l = np.average(batch_loss_l)
             av_train_loss_c = np.average(batch_loss_c)
-            av_train_loss = av_train_loss_l + av_train_loss_c
+            av_train_loss_r = np.average(batch_loss_r)
+            av_train_loss = av_train_loss_l + av_train_loss_c + av_train_loss_r
 
             tr.set_description(
-                ('Epoch {} Loss {:.5f} ' +
-                 'Localization {:.5f} Classification {:.5f}').format(
-                    epoch, av_train_loss, av_train_loss_l, av_train_loss_c))
+                ('Epoch {} Loss {:.5f} Localization {:.5f} ' +
+                 'Classification {:.5f} Regresion {:.5f}').format(
+                 epoch, av_train_loss, av_train_loss_l, av_train_loss_c, av_train_loss_r))
 
             tr.update(len(images))
 
         train_loss_l = np.append(train_loss_l, av_train_loss_l)
         train_loss_c = np.append(train_loss_c, av_train_loss_c)
+        train_loss_r = np.append(train_loss_r, av_train_loss_r)
         train_loss = np.append(train_loss, av_train_loss)
 
         tr.close()
@@ -174,25 +177,27 @@ def execute(model_name, qtype, train_dataset_path, val_dataset_path, save_dir,
 
         tr = trange(len(val_loader)*batch_size, file=sys.stdout)
         tr.set_description('Validation')
-        batch_loss_l, batch_loss_c = np.empty(0), np.empty(0)
+        batch_loss_l, batch_loss_c, batch_loss_r = np.empty(0), np.empty(0), np.empty(0)
         net.eval()
 
         with torch.no_grad():
             for batch_index, (images, targets) in enumerate(val_loader):
 
-                loss_l, loss_c = batch_step(images, targets, None,
-                                            net, criterion)
+                loss_l, loss_c, loss_r = batch_step(images, targets, None,
+                                                    net, criterion)
                 batch_loss_l = np.append(batch_loss_l, loss_l.item())
                 batch_loss_c = np.append(batch_loss_c, loss_c.item())
+                batch_loss_r = np.append(batch_loss_r, loss_r.item())
 
                 av_val_loss_l = np.average(batch_loss_l)
                 av_val_loss_c = np.average(batch_loss_c)
-                av_val_loss = av_val_loss_l + av_val_loss_c
+                av_val_loss_r = np.average(batch_loss_r)
+                av_val_loss = av_val_loss_l + av_val_loss_c + av_train_loss_r
 
                 tr.set_description(
-                    ('Validation Loss {:.5f} ' +
-                     'Localization {:.5f} Classification {:.5f}').format(
-                       av_val_loss, av_val_loss_l, av_val_loss_c))
+                    ('Validation Loss {:.5f} Localization {:.5f} ' +
+                     'Classification {:.5f} Regresion {:.5f}').format(
+                     av_val_loss, av_val_loss_l, av_val_loss_c, av_val_loss_r))
 
                 tr.update(len(images))
 
@@ -200,11 +205,12 @@ def execute(model_name, qtype, train_dataset_path, val_dataset_path, save_dir,
 
         val_loss_l = np.append(val_loss_l, av_val_loss_l)
         val_loss_c = np.append(val_loss_c, av_val_loss_c)
+        val_loss_r = np.append(val_loss_r, av_val_loss_r)
         val_loss = np.append(val_loss, av_val_loss)
 
-        plot.draw_loss([train_loss, train_loss_l, train_loss_c],
-                       [val_loss, val_loss_l, val_loss_c],
-                       ['Full', 'Localization', 'Classification'])
+        plot.draw_loss([train_loss, train_loss_l, train_loss_c, train_loss_r],
+                       [val_loss, val_loss_l, val_loss_c, val_loss_r],
+                       ['Full', 'Localization', 'Classification', 'Regression'])
 
         if cp_es(av_val_loss, ssd_net):
             break
