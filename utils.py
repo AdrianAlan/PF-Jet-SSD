@@ -16,7 +16,7 @@ class Plotting():
 
         self.save_dir = save_dir
         self.line_styles = [(0, ()), (0, (2, 2))]
-        self.legend = ['Full Precision Network', 'Ternary Weight Network']
+        self.legend = ['Full Precision Network', 'Ternary Precision Network']
         self.loc_legend = [r'$\mu$', r'$\mu_{1/2}$']
         self.ref_recall = ref_recall
 
@@ -35,7 +35,8 @@ class Plotting():
         return OffsetImage(plt.imread('./plots/hls4mllogo.jpg', format='jpg'),
                            zoom=0.08)
 
-    def draw_loss(self, data_train, data_val, keys, type='full'):
+    def draw_loss(self, data_train, data_val, type='full',
+                  keys=['Localization', 'Classification', 'Regression']):
         """Plots the training and validation loss"""
 
         fig, ax = plt.subplots()
