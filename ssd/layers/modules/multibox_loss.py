@@ -61,7 +61,7 @@ class MultiBoxLoss(nn.Module):
         for idx in range(num):
             truths = targets[idx][:, :4].data
             labels = targets[idx][:, 4].data
-            regres = targets[idx][:, 5].data
+            regres = targets[idx][:, -1:].data
             defaults = priors.data
             match(self.threshold, truths, defaults, self.variance, labels,
                   regres, loc_t, conf_t, regr_t, idx)
