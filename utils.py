@@ -116,9 +116,8 @@ class Plotting():
         fig.savefig('%s/pr-curve' % self.save_dir)
         plt.close(fig)
 
-    def draw_loc_delta(self, data, classes, labels=['eta', 'phi', 'mass'],
-                       width=[.1, .05, .03], nbins=15):
-        """Plots the localization delta in eta and phi"""
+    def draw_loc_delta(self, data, classes, width=[.1, .05, .03], nbins=15):
+        """Plots the localization delta in eta, phi and mass"""
 
         def get_width(p, w):
             return 10**(np.log10(p)+w/2.)-10**(np.log10(p)-w/2.)
@@ -136,14 +135,14 @@ class Plotting():
 
         for x, (c, w) in enumerate(zip(classes, width)):
 
-            for column, label in [(2, r'$\sigma(\eta_{SSD}-\eta_{GT})$'),
-                                  (3, r'$\sigma(\phi_{SSD}-\phi_{GT})$'),
-                                  (4, r'$\frac{|m_{SSD}-m_{GT}|}{m_{GT}}$')]:
+            for idx, lbl, n in [(2, r'$\sigma(\eta_{SSD}-\eta_{GT})$', 'eta'),
+                                (3, r'$\sigma(\phi_{SSD}-\phi_{GT})$', 'phi'),
+                                (4, r'$\frac{|m_{SSD}-m_{GT}|}{m_{GT}}$', 'mass')]:
 
                 fig, ax = plt.subplots()
                 cst_lgd = []
                 plt.xlabel('$p_T$ [GeV]', horizontalalignment='right', x=1.0)
-                plt.ylabel(label, horizontalalignment='right', y=1.0)
+                plt.ylabel(lbl, horizontalalignment='right', y=1.0)
 
                 for q, d in enumerate(data):
                     shade = 'shade_800' if q else 'shade_200'
@@ -158,7 +157,7 @@ class Plotting():
                     bmin = 0
                     for bmax in binning:
                         b = cls[(cls[:, 1] > bmin) & (cls[:, 1] <= bmax)]
-                        bins.append(np.abs(b[:, column]))
+                        bins.append(np.abs(b[:, idx]))
                         bmin = bmax
                     cst_lgd.append(get_line(x, shade, q, c, 0))
                     cst_lgd.append(get_line(x, shade, q, c, 1))
@@ -198,8 +197,7 @@ class Plotting():
                 ax.legend(handles=cst_lgd, loc='upper left',
                           bbox_to_anchor=(0, -0.1))
 
-                fig.savefig('%s/delta-%s-%s' % (self.save_dir, c,
-                                                labels[column]))
+                fig.savefig('%s/delta-%s-%s' % (self.save_dir, c, n))
                 plt.close(fig)
 
 

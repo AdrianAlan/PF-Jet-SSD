@@ -17,131 +17,146 @@ from tqdm import tqdm
 from utils import Plotting, GetResources
 
 
+def detection_collate(batch):
+    targets = []
+    imgs = []
+    for sample in batch:
+        imgs.append(sample[0])
+        targets.append(torch.FloatTensor(sample[1]))
+    return torch.stack(imgs, 0), targets
+
+
 def get_data_loader(source_path, batch_size, num_workers, shuffle=False):
     h5 = h5py.File(source_path, 'r')
     generator = CalorimeterJetDataset(hdf5_dataset=h5, return_pt=True)
     return torch.utils.data.DataLoader(generator,
                                        batch_size=batch_size,
+                                       collate_fn=detection_collate,
                                        shuffle=shuffle,
                                        num_workers=num_workers), h5
 
 
-def test_net(model, dataset, im_size, top_k=200, conf_threshold=0.05,
-             overlap_threshold=0.1, jet_classes=[], epsilon=10**-6):
-    results = len(jet_classes)*[np.empty((0, 2))]
-    deltas = np.empty((0, 5))
-    inf_time = []
+def test_net(model, dataset, im_size, conf_threshold=0., batch_size=50,
+             overlap_threshold=.1, jet_classes=[], epsilon=10**-6, top_k=200):
+
+    results = [torch.empty(0, 2) for _ in jet_classes]
+    deltas = torch.empty((0, 5))
+    inf_time = torch.empty(0)
 
     with torch.no_grad():
 
-        progress_bar = tqdm(total=len(dataset), desc='Evaluating events')
-        for data, targets in dataset:
+        progress_bar = tqdm(total=batch_size*len(dataset),
+                            desc='Evaluating events')
 
-            data = data.cuda()
+        for X, y in dataset:
+
             t_start = time()
-            detections = model(data).data
+            pred = model(X.cuda()).data
             t_end = time()
-            inf_time.append(t_end-t_start)
+            inf_time = torch.cat((inf_time, torch.Tensor([t_end-t_start])))
 
-            targets = targets[0].cpu().numpy()
-            targets[:, 0] *= im_size[0]
-            targets[:, 2] *= im_size[0]
-            targets[:, 1] *= im_size[1]
-            targets[:, 3] *= im_size[1]
+            for idx in range(batch_size):
+                detections, targets = pred[idx].cuda(), y[idx].cuda()
+                targets[:, 0] *= im_size[0]
+                targets[:, 2] *= im_size[0]
+                targets[:, 1] *= im_size[1]
+                targets[:, 3] *= im_size[1]
 
-            all_detections = np.empty((0, 8))
-            for j in range(1, detections.size(1)):
-                dets = detections[0, j, :]
+                all_dets = torch.empty((0, 8))
 
-                # Filter detections above given threshold
-                dets = dets[dets[:, 0] > conf_threshold]
+                for j in range(1, detections.size(0)):
+                    dets = detections[j, :]
 
-                if dets.size(0) == 0:
-                    continue
+                    # Filter detections above given threshold
+                    dets = dets[dets[:, 0] > conf_threshold]
 
-                boxes = dets[:, 1:5]
-                boxes[:, 0] *= im_size[0]
-                boxes[:, 2] *= im_size[0]
-                boxes[:, 1] *= im_size[1]
-                boxes[:, 3] *= im_size[1]
+                    if dets.size(0) == 0:
+                        continue
 
-                scores = dets[:, 0].cpu().numpy()
-                labels = np.array([j-1]*len(scores))
-                regres = dets[:, -1].cpu().numpy()
+                    boxes = dets[:, 1:5]
+                    boxes[:, 0] *= im_size[0]
+                    boxes[:, 2] *= im_size[0]
+                    boxes[:, 1] *= im_size[1]
+                    boxes[:, 3] *= im_size[1]
 
-                # Format: [xmin, ymin, xmax, ymax, label, score, gt, m]
-                class_det = np.hstack((boxes.cpu().numpy(),
-                                       labels[:, np.newaxis],
-                                       scores[:, np.newaxis],
-                                       np.zeros(len(boxes))[:, np.newaxis],
-                                       regres[:, np.newaxis])
-                                      ).astype(np.float32, copy=False)
+                    scores = dets[:, 0].unsqueeze(1)
+                    regres = dets[:, -1].unsqueeze(1)
+                    labels = (j-1)*torch.ones(len(scores)).unsqueeze(1)
+                    gt = torch.zeros(len(scores)).unsqueeze(1)
 
-                all_detections = np.vstack((all_detections, class_det))
+                    # Format: [xmin, ymin, xmax, ymax, label, score, gt, m]
+                    dets = torch.cat((boxes, labels, scores, gt, regres), 1)
+                    all_dets = torch.cat((all_dets, dets))
 
-            # Sort by confidence
-            all_detections = all_detections[(-all_detections[:, 5]).argsort()]
+                # Sort by confidence
+                all_dets = all_dets[(-all_dets[:, 5]).argsort()]
 
-            # Select top k predictions
-            all_detections = all_detections[:top_k]
+                # Select top k predictions
+                all_dets = all_dets[:top_k]
 
-            for t in targets:
-                detected = False
+                for t in targets:
+                    detected = False
 
-                for x, d in enumerate(all_detections):
-                    ixmin = np.maximum(t[0], d[0])
-                    iymin = np.maximum(t[1], d[1])
-                    ixmax = np.minimum(t[2], d[2])
-                    iymax = np.minimum(t[3], d[3])
+                    for x, d in enumerate(all_dets):
+                        ixmin = torch.max(t[0], d[0])
+                        iymin = torch.max(t[1], d[1])
+                        ixmax = torch.min(t[2], d[2])
+                        iymax = torch.min(t[3], d[3])
 
-                    iw = np.maximum(ixmax - ixmin, 0.)
-                    ih = np.maximum(iymax - iymin, 0.)
-                    intersection = iw * ih
+                        iw = torch.max(ixmax - ixmin, torch.tensor(0.))
+                        ih = torch.max(iymax - iymin, torch.tensor(0.))
+                        intersection = iw * ih
 
-                    union = ((d[2] - d[0]) * (d[3] - d[1]) +
-                             (t[2] - t[0]) * (t[3] - t[1]) - intersection)
+                        union = ((d[2] - d[0]) * (d[3] - d[1]) +
+                                 (t[2] - t[0]) * (t[3] - t[1]) - intersection)
 
-                    overlap = intersection / (union + 10e-12)
+                        overlap = intersection / (union + epsilon)
 
-                    if overlap > overlap_threshold:
-                        if d[4] == t[4]:
+                        if overlap > overlap_threshold:
+                            if d[4] == t[4]:
 
-                            detected = True
-                            all_detections[x][6] = 1
+                                detected = True
+                                all_dets[x][6] = 1
 
-                            # Divide by 115 to get correct resolution
-                            d_eta = ((t[0]+(t[2]-t[0])/2) -
-                                     (d[0]+(d[2]-d[0])/2))/115
-                            d_phi = ((t[1]+(t[3]-t[1])/2) -
-                                     (d[1]+(d[3]-d[1])/2))/115
-                            d_mass = np.abs(t[5] - d[7]) / (t[5] + epsilon)
-                            deltas = np.vstack((deltas,
-                                               [t[4], t[6], d_eta, d_phi,
-                                                d_mass]))
-                            break
+                                # Divide by 115 to get correct resolution
+                                d_eta = ((t[0]+(t[2]-t[0])/2) -
+                                         (d[0]+(d[2]-d[0])/2))/115
+                                d_phi = ((t[1]+(t[3]-t[1])/2) -
+                                         (d[1]+(d[3]-d[1])/2))/115
+                                d_mass = (t[5] - d[7]) / (t[5] + epsilon)
+                                deltas = torch.cat((deltas,
+                                                    torch.Tensor([[t[4], t[6],
+                                                                   d_eta,
+                                                                   d_phi,
+                                                                   d_mass]])))
+                                break
 
-                if not detected:
-                    fn = np.hstack((t[:5], [0, 1, 1])).astype(np.float32,
-                                                              copy=False)
-                    all_detections = np.vstack((all_detections, fn))
+                    if not detected:
+                        fn = torch.cat((t[:5],
+                                        torch.Tensor([0, 1, 1]))).unsqueeze(0)
+                        all_dets = torch.cat((all_dets, fn))
 
-            for c in range(len(jet_classes)):
-                class_detections = all_detections[all_detections[:, 4] == c]
-                results[c] = np.concatenate((results[c],
-                                             class_detections[:, [6, 5]]))
-            progress_bar.update(1)
+                for c in range(len(jet_classes)):
+                    cls_dets = all_dets[all_dets[:, 4] == c]
+                    results[c] = torch.cat((results[c], cls_dets[:, [6, 5]]))
+
+            progress_bar.update(batch_size)
 
         progress_bar.close()
 
-        it = 1000*np.mean(inf_time)
+        it = inf_time.mean()*1000
+
         ret = []
         for c in range(len(jet_classes)):
-            p, r, _ = precision_recall_curve(results[c][:, 0],
-                                             results[c][:, 1])
-            ap = average_precision_score(results[c][:, 0], results[c][:, 1])
+            truth = results[c][:, 0].cpu().numpy()
+            score = results[c][:, 1].cpu().numpy()
+            p, r, _ = precision_recall_curve(truth, score)
+            ap = average_precision_score(truth, score)
             ret.append((r, p, jet_classes[c], ap))
 
-        return it, ret, deltas
+        deltas = torch.abs(deltas)
+
+        return it.cpu().numpy(), ret, deltas.cpu().numpy()
 
 
 if __name__ == '__main__':
@@ -176,6 +191,7 @@ if __name__ == '__main__':
     jet_classes = ['b', 'H-W', 't']
     im_size = (340, 360)
     top_k = 10
+    batch_size = 100
     num_classes = num_classes + 1  # +1 for background
 
     plotting_results = []
@@ -192,16 +208,19 @@ if __name__ == '__main__':
 
         macs = GetResources(net, dummy_input=torch.randn(1, 2, 340, 360))
 
-        loader, h5 = get_data_loader(args.test_dataset, 1, args.num_workers)
+        loader, h5 = get_data_loader(args.test_dataset,
+                                     batch_size,
+                                     args.num_workers)
 
         it, res, delta = test_net(net, loader, top_k=top_k,
                                   im_size=im_size,
+                                  batch_size=batch_size,
                                   conf_threshold=args.confidence_threshold,
                                   overlap_threshold=args.overlap_threshold,
                                   jet_classes=jet_classes)
         print('')
         print('Total OPS: {0:.3f}G'.format(macs.profile() / 1e9))
-        print('Average inference time: {0:.3f} ms'.format(it))
+        print('Average inference time: {0:.3f} ms'.format(it/batch_size))
         for _, _, c, ap in res:
             print('Average precision for class {0}: {1:.3f}'.format(c, ap))
 
