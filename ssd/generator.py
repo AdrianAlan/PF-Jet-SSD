@@ -54,26 +54,21 @@ class CalorimeterJetDataset(torch.utils.data.Dataset):
                        indices_ecal_eta, indices_hcal_eta,
                        ecal_energy, hcal_energy):
 
-        ecal_max = np.max(ecal_energy)
-        hcal_max = np.max(hcal_energy)
-
-        ecal_energy = ecal_energy / ecal_max
-        hcal_energy = hcal_energy / hcal_max
-
         indices_channels = np.append(np.zeros(len(indices_ecal_phi)),
                                      np.ones(len(indices_hcal_phi)))
         indices_phi = np.append(indices_ecal_phi, indices_hcal_phi)
         indices_eta = np.append(indices_ecal_eta, indices_hcal_eta)
         energy = np.append(ecal_energy, hcal_energy)
+        scaler = np.max(energy)
+        energy = energy / scaler
 
         i = torch.LongTensor([indices_channels, indices_phi, indices_eta])
         v = torch.FloatTensor(energy)
-        pixels = torch.sparse.FloatTensor(i, v,
-                                          torch.Size([self.channels,
-                                                      self.height,
-                                                      self.width]))
+        pixels = torch.sparse.FloatTensor(i, v, torch.Size([self.channels,
+                                                            self.height,
+                                                            self.width]))
 
-        return pixels.to_dense(), ecal_max, hcal_max
+        return pixels.to_dense(), scaler
 
     def __getitem__(self, index):
 
@@ -91,17 +86,17 @@ class CalorimeterJetDataset(torch.utils.data.Dataset):
             indices_hcal_eta = np.asarray(self.hcal_eta[index], dtype=np.int16)
             hcal_energy = np.asarray(self.hcal_energy[index], dtype=np.float32)
 
-            calorimeter, e_max, h_max = self.process_images(indices_ecal_phi,
-                                                            indices_hcal_phi,
-                                                            indices_ecal_eta,
-                                                            indices_hcal_eta,
-                                                            ecal_energy,
-                                                            hcal_energy)
+            calorimeter, scaler = self.process_images(indices_ecal_phi,
+                                                      indices_hcal_phi,
+                                                      indices_ecal_eta,
+                                                      indices_hcal_eta,
+                                                      ecal_energy,
+                                                      hcal_energy)
 
             # Set labels
             labels_raw = np.asarray([self.labels[index]], dtype=np.float32)
             labels_raw = torch.FloatTensor(labels_raw)
-            labels_processed = self.process_labels(labels_raw, e_max+h_max)
+            labels_processed = self.process_labels(labels_raw, scaler)
 
             if labels_processed.shape[0]:
                 repeat = False
