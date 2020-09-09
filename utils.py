@@ -17,7 +17,7 @@ class Plotting():
         self.save_dir = save_dir
         self.line_styles = [(0, ()), (0, (2, 2))]
         self.legend = ['Full Precision Network', 'Ternary Precision Network']
-        self.loc_legend = [r'$\mu$', r'$\mu_{1/2}$']
+        self.loc_legend = [r'$\mu_{1/2}$', r'$\mu$']
         self.ref_recall = ref_recall
 
         plt.style.use('./plots/ssdjet.mplstyle')
@@ -122,10 +122,10 @@ class Plotting():
         def get_width(p, w):
             return 10**(np.log10(p)+w/2.)-10**(np.log10(p)-w/2.)
 
-        def get_line(x, shade, q, c, median):
+        def get_line(x, shade, q, c, mean):
             label = '{0}: {1} jets, {2}'.format(self.legend[q], c,
-                                                self.loc_legend[median])
-            if median:
+                                                self.loc_legend[mean])
+            if mean:
                 return Line2D([0], [0], color=self.colors[x][shade],
                               linestyle=self.line_styles[q], label=label,
                               marker=self.markers[q], lw=0, markersize=4)
