@@ -188,8 +188,8 @@ def execute(model_name, qtype, train_dataset_path, val_dataset_path, save_dir,
                            val_loss.cpu().numpy(),
                            type=qtype)
 
-        if cp_es(av_epoch_loss.sum(0), ssd_net):
-            break
+            if cp_es(av_epoch_loss.sum(0), ssd_net):
+                break
 
     h5t.close()
     h5v.close()
