@@ -148,7 +148,7 @@ def execute(model_name, qtype, train_dataset_path, val_dataset_path, save_dir,
                     if hasattr(p, 'org'):
                         p.org.copy_(p.data.clamp_(-1, 1))
 
-            total_epoch_loss += torch.stack([l, c, r])
+            total_epoch_loss += torch.tensor([l.item(), c.item(), r.item()])
             av_epoch_loss = total_epoch_loss / (batch_index + 1)
 
             tr.set_description(
@@ -171,7 +171,7 @@ def execute(model_name, qtype, train_dataset_path, val_dataset_path, save_dir,
             for batch_index, (images, targets) in enumerate(val_loader):
 
                 l, c, r = batch_step(images, targets, None, net, criterion)
-                total_epoch_loss += torch.stack([l, c, r])
+                total_epoch_loss += torch.tensor([l.item(), c.item(), r.item()])
                 av_epoch_loss = total_epoch_loss / (batch_index + 1)
 
                 tr.set_description(
