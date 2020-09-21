@@ -1,53 +1,51 @@
+import argparse
 import uproot
 import simplejson as json
 
-FILE_DIR = '/eos/project/d/dshep/CEVA'
-JSON_OUT_DIR = '../data/file-configuration.json' 
+from os import listdir
+from os.path import isfile, join
 
-# Define quarks mass, in GeV
-q_mass = {'b': 4.18, 'q': 0.096, 't': 173.1, 'W': 80.39, 'h': 124.97}
 
-# Define radius of a jet
-delta_R = {'b': 0.4, 'q': 0.4, 't': 0.8, 'W': 0.8, 'h': 0.8}
+def get_config(sdir):
 
-# Treshold traverse momentum for the jets
-min_pt = {}
-for jtype, mass in q_mass.items():
-    pt = 2*mass/delta_R[jtype]
-    min_pt[jtype] = pt
+    config = {}
+    folders = [f for f in listdir(sdir) if not isfile(join(sdir, f))]
 
-configuration = {}
+    for folder_name in folders:
 
-for jet_type in ['bb', 'tt', 'hh', 'WW']:
+        print('Processing %s folder' % folder_name)
 
-    TOTAL_EVENTS = TOTAL_JETS = 0
+        config[folder_name] = {}
+        config[folder_name]['files'] = {}
+        total_events_in_file = 0
 
-    configuration[jet_type] = {}
-    configuration[jet_type]['files'] = {}
+        current_path = join(sdir, folder_name)
+        files = [f for f in listdir(current_path) if f[-5:] == '.root']
 
-    print('Processing %s files...' % jet_type)
-
-    for file_number in range(100):
-        try:
-            jtype = 'RSGraviton_%s_NARROW' % jet_type
-            rfile = uproot.open('%s/%s/%s_%s.root' %
-                                (FILE_DIR, jtype, jtype, file_number))
-            if rfile.keys():
-
+        for file_name in files:
+            try:
+                file_path = join(current_path, file_name)
+                rfile = uproot.open(file_path)
                 events = len(rfile['Delphes']['Tower'].array())
-                pts = rfile['Delphes']['GenJet']['GenJet.PT'].array()
+                config[folder_name]['files'][file_path] = events
+                total_events_in_file = total_events_in_file + events
+            except ValueError:
+                pass
+            except KeyError:
+                pass
 
-                TOTAL_EVENTS = TOTAL_EVENTS + events
-                for e in range(events):
-                    jets = len([i for i in pts[e] if i > min_pt[jet_type[0]]])
-                    TOTAL_JETS = TOTAL_JETS + jets
+        config[folder_name]['events'] = total_events_in_file
+    return config
 
-                configuration[jet_type]['files'][str(file_number)] = events
-        except:
-            pass
 
-    configuration[jet_type]['events'] = TOTAL_EVENTS
-    configuration[jet_type]['jets'] = TOTAL_JETS
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser('Generate file configuration file')
+    parser.add_argument('source_dir', type=str,
+                        help='Path to root files')
+    parser.add_argument('destination_dir', type=str,
+                        help='Save path for the configuration file')
+    args = parser.parse_args()
 
-with open(JSON_OUT_DIR, 'w') as f:
-    json.dump(configuration, f)
+    config = get_config(args.source_dir)
+    with open(args.destination_dir, 'w') as f:
+        json.dump(config, f)

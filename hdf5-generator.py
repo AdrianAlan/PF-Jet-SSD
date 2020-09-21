@@ -29,10 +29,11 @@ class PhysicsConstants():
         self.min_eta = -3
         self.max_eta = 3
 
+        self.delphes = uproot.open(example_file)['Delphes']
+
     def get_edges_ecal(self, edge_index, tower, sample_events=1000):
-        file = uproot.open(self.example_file)
-        tower_flag_full_file = file['Delphes']['Tower'][tower].array()
-        edges_full_file = file['Delphes']['Tower']['Tower.Edges[4]'].array()
+        tower_flag_full_file = self.delphes['Tower'][tower].array()
+        edges_full_file = self.delphes['Tower']['Tower.Edges[4]'].array()
 
         global_edges = np.array([], dtype=np.float32)
 
@@ -57,10 +58,9 @@ class HDF5Generator:
     def __init__(self,
                  hdf5_dataset_path,
                  hdf5_dataset_size,
-                 example_file,
                  files_details):
 
-        self.constants = PhysicsConstants(example_file)
+        self.constants = PhysicsConstants(list(files_details[0])[0])
 
         self.edges_eta_ecal = self.constants.get_edges_ecal(edge_index=0,
                                                             tower='Tower.Eem')
@@ -306,43 +306,33 @@ class HDF5Generator:
 
 class Utils():
 
-    def parse_config(self, jtype, nofiles, config_path, source_files_dir):
+    def parse_config(self, folder, nofiles, config_path):
 
         # Laod configuration
         with open(config_path, 'r') as f:
             config = json.loads(f.read())
 
         # Total number of events
-        total = config[jtype]['events']
-        files_details = []
-        files_batch = []
-        file_id = 0
+        total = config[folder]['events']
+        files_list = list(config[folder]['files'])
+        files_details, files_batch = [], []
+        gtotal, fid, event_min_next = 0, 0, 0
         batch_id = 1
         batch_size = total / float(nofiles)
-        gtotal = 0
-        event_min_next = 0
 
         while gtotal < total:
-            # Missing file skip
-            if str(file_id) not in config[jtype]['files'].keys():
-                file_id = file_id + 1
-                continue
+
+            file = files_list[fid]
 
             # Set FROM and TO indexes
             event_min = event_min_next
-            event_max = config[jtype]['files'][str(file_id)]
-
-            # Set file name
-            ftype = 'RSGraviton_%s_NARROW' % jtype
-            file = "%s/%s/%s_%s.root" % (source_files_dir,
-                                         ftype, ftype, file_id)
+            event_max = config[folder]['files'][file]
 
             # Fix nominal target of events
             gtotal_target = gtotal + event_max - event_min
 
             # Save filenames with indexes
-
-            # When event_max has to be cropped
+            # Fraction of the file
             if batch_id*batch_size <= gtotal_target:
                 max_in_this_batch = int(batch_id*batch_size)
                 event_max = event_max - (gtotal_target - max_in_this_batch)
@@ -356,11 +346,11 @@ class Utils():
                 files_details.append(files_batch)
                 files_batch = []
                 batch_id = batch_id + 1
-            # Full file
+            # Otherwise: full file
             else:
                 files_batch.append({file: (event_min, event_max)})
                 event_min_next = 0
-                file_id = file_id + 1
+                fid += 1
 
             gtotal = gtotal + event_max - event_min
 
@@ -383,63 +373,31 @@ class IsReadableDir(argparse.Action):
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser('Convert root file data to h5')
-
-    parser.add_argument('jtype',
-                        type=str,
-                        choices={'bb', 'tt', 'WW', 'hh'},
-                        help='Type of jet to convert')
-
-    parser.add_argument('-n', '--number-of-files',
-                        type=int,
-                        default=10,
-                        help='Target number of output files',
-                        dest='nfiles')
-
-    parser.add_argument('-o', '--save-path',
-                        type=str,
-                        action=IsReadableDir,
-                        default='.',
-                        help='Output directory',
-                        dest='savedir')
-
-    parser.add_argument('-s', '--source-path',
-                        type=str,
-                        action=IsReadableDir,
-                        default='/eos/project/d/dshep/CEVA',
-                        help='Source directory',
-                        dest='sourcedir')
-
-    parser.add_argument('-c', '--configuration',
-                        type=str,
-                        action=IsReadableDir,
+    parser.add_argument('src_folder', type=str, help='Folder to convert')
+    parser.add_argument('-n', '--number-of-files', type=int, default=10,
+                        help='Target number of output files', dest='nfiles')
+    parser.add_argument('-o', '--save-path', type=str, action=IsReadableDir,
+                        default='.', help='Output directory', dest='save_dir')
+    parser.add_argument('-c', '--config', type=str, action=IsReadableDir,
                         default='./data/file-configuration.json',
-                        help='File configuration path',
-                        dest='configuration')
-
+                        help='Configuration file path', dest='config')
     args = parser.parse_args()
 
     utils = Utils()
 
     files_details, batch_size, total_events = utils.parse_config(
-        args.jtype,
-        args.nfiles,
-        args.configuration,
-        args.sourcedir)
+        args.src_folder, args.nfiles, args.config)
 
-    progress_bar = tqdm(total=total_events,
-                        desc=('Creating dataset for %s jets' % args.jtype))
+    pb = tqdm(total=total_events, desc=('Processing %s' % args.src_folder))
 
     for index, file_dict in enumerate(files_details):
 
         dataset_size = int((index+1)*batch_size)-int((index)*batch_size)
-
         generator = HDF5Generator(
-                hdf5_dataset_path='%s/RSGraviton_%s_NARROW_%s-full.h5' %
-                                  (args.savedir, args.jtype, index),
+                hdf5_dataset_path='{0}/{1}_{2}.h5'.format(
+                        args.save_dir, args.src_folder, index),
                 hdf5_dataset_size=dataset_size,
-                example_file='%s/RSGraviton_%s/RSGraviton_%s_0.root' %
-                             (args.sourcedir, 'WW_NARROW', 'WW_NARROW'),
                 files_details=file_dict)
-        generator.create_hdf5_dataset(progress_bar)
+        generator.create_hdf5_dataset(pb)
 
-    progress_bar.close()
+    pb.close()
