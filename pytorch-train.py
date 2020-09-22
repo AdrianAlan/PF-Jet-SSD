@@ -27,13 +27,11 @@ def adjust_learning_rate(optimizer, lr):
         param_group['lr'] = lr
 
 
-def detection_collate(batch):
-    targets = []
-    imgs = []
-    for sample in batch:
-        imgs.append(sample[0])
-        targets.append(torch.FloatTensor(sample[1]))
-    return torch.stack(imgs, 0), targets
+def collate_fn(batch):
+    transposed_data = list(zip(*batch))
+    inp = torch.stack(transposed_data[0], 0)
+    tgt = list(transposed_data[1])
+    return inp, tgt
 
 
 def weights_init(m):
@@ -47,7 +45,7 @@ def get_data_loader(source_path, batch_size, num_workers, shuffle=True):
     generator = CalorimeterJetDataset(hdf5_dataset=h5)
     return torch.utils.data.DataLoader(generator,
                                        batch_size=batch_size,
-                                       collate_fn=detection_collate,
+                                       collate_fn=collate_fn,
                                        shuffle=shuffle,
                                        num_workers=num_workers), h5
 
