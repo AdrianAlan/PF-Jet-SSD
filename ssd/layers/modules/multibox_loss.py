@@ -79,8 +79,14 @@ class MultiBoxLoss(nn.Module):
 
         # Localization Loss (Smooth L1)
         # Shape: [batch,num_priors,4]
-        pos_idx = pos.unsqueeze(pos.dim()).expand_as(loc_data)
-        loc_p = loc_data[pos_idx].view(-1, 4)
+        loc_p = torch.Tensor(num, num_priors, 4)
+        loc_p[:, :, :2] = loc_data
+        loc_p[:, :, 2] = 46./340  # add fixed width
+        loc_p[:, :, 3] = 46./360  # add fixed height
+
+        # Mask by confidence
+        pos_idx = pos.unsqueeze(pos.dim()).expand_as(loc_p)
+        loc_p = loc_p[pos_idx].view(-1, 4)
         loc_t = loc_t[pos_idx].view(-1, 4)
         loss_l = F.smooth_l1_loss(loc_p, loc_t, reduction='sum')
 

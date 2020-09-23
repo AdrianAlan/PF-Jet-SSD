@@ -30,8 +30,7 @@ class SSD(nn.Module):
                   'feature_maps_eta': [44, 21, 14, 8, 3, 1],
                   'steps_phi': [8, 17, 24, 45, 120, 360],
                   'steps_eta': [8, 17, 25, 43, 114, 340],
-                  'sizes': [46, 46, 46, 46, 46, 46],
-                  'clip': False}
+                  'size': 46}
         self.priors = Variable(self.priorbox.apply(config))
         self.L2Norm = L2Norm(256, 20)
 
@@ -70,7 +69,7 @@ class SSD(nn.Module):
         # Apply correct output layer
         if self.phase == "test":
             output = self.detect.apply(
-                loc.view(loc.size(0), -1, 4),
+                loc.view(loc.size(0), -1, 2),
                 self.softmax(conf.view(conf.size(0), -1, self.num_classes)),
                 regr.view(regr.size(0), -1, 1),
                 self.priors.type(type(x.data)),
@@ -80,7 +79,7 @@ class SSD(nn.Module):
                 self.nms)
         else:
             output = (
-                loc.view(loc.size(0), -1, 4),
+                loc.view(loc.size(0), -1, 2),
                 conf.view(conf.size(0), -1, self.num_classes),
                 regr.view(regr.size(0), -1, 1),
                 self.priors)
@@ -157,7 +156,7 @@ def multibox(base, extras, num_mbox, num_classes, conv):
     extra_sources = [4, 11, 18, 24]
 
     for k, v in enumerate(base_sources):
-        loc += [conv(base[v].out_channels, num_mbox * 4,
+        loc += [conv(base[v].out_channels, num_mbox * 2,
                 kernel_size=3, padding=1)]
         conf += [conv(base[v].out_channels, num_mbox * num_classes,
                  kernel_size=3, padding=1)]
@@ -165,7 +164,7 @@ def multibox(base, extras, num_mbox, num_classes, conv):
                  kernel_size=3, padding=1)]
 
     for k, v in enumerate(extra_sources):
-        loc += [conv(extras[v].out_channels, num_mbox * 4,
+        loc += [conv(extras[v].out_channels, num_mbox * 2,
                 kernel_size=3, padding=1)]
         conf += [conv(extras[v].out_channels, num_mbox * num_classes,
                  kernel_size=3, padding=1)]

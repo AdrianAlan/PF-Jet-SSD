@@ -19,8 +19,10 @@ class PriorBox(Function):
         feature_maps_phi = config['feature_maps_phi']
         steps_eta = config['steps_eta']
         steps_phi = config['steps_phi']
-        sizes = config['sizes']
-        clip = config['clip']
+        size = config['size']
+
+        s_k_max_y = size/image_size[0]
+        s_k_max_x = size/image_size[1]
 
         for k, (f_y, f_x) in enumerate(zip(feature_maps_phi,
                                            feature_maps_eta)):
@@ -31,12 +33,8 @@ class PriorBox(Function):
                 cx = (j + 0.5) / f_k_x
                 cy = (i + 0.5) / f_k_y
 
-                s_k_max_y = sizes[k]/image_size[0]
-                s_k_max_x = sizes[k]/image_size[1]
                 mean += [cx, cy, s_k_max_x, s_k_max_y]
 
         output = torch.Tensor(mean).view(-1, 4)
 
-        if clip:
-            output.clamp_(max=1, min=0)
         return output
