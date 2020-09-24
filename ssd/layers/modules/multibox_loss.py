@@ -8,95 +8,87 @@ from torch.autograd import Variable
 
 class MultiBoxLoss(nn.Module):
     """SSD Weighted Loss Function
-    Compute Targets:
-    1) Produce Confidence Target Indices by matching  ground truth boxes with
-       'priorboxes' that have jaccard index > threshold parameter
-    2) Produce localization target by 'encoding' variance into offsets of
-       ground truth boxes and their matched 'priorboxes'.
-    3) Hard negative mining to filter the excessive number of negative examples
-       that comes with using a large number of default bounding boxes.
-    Objective Loss:
-        L(x,c,l,g) = (L_conf(x, c) + alpha*L_loc(x,l,g)) / N
-        Where, L_conf is the CrossEntropy Loss and L_loc is the SmoothL1 Loss
-        weighted by alpha which is set to 1 by cross val.
-        Args:
-            c: class confidences,
-            l: predicted boxes,
-            g: ground truth boxes
-            N: number of matched default boxes
-        See: https://arxiv.org/pdf/1512.02325.pdf for more details.
+    This class produces confidence target indices by matching ground truth
+    boxes with priors that have jaccard index > threshold parameter.
+    Localization targets are produced by adding variance into offsets of ground
+    truth boxes and their matched priors. Hard negative mining is added to
+    filter the excessive number of negative examples that comes with using
+    a large number of default bounding boxes. https://arxiv.org/pdf/1512.02325
     """
-    def __init__(self, num_classes, min_overlap=0.5, neg_pos=3, use_gpu=True):
+
+    def __init__(self, n_classes, min_overlap=0.5, neg_pos=3, object_size=46,
+                 input_dimensions=(360, 340), use_gpu=True):
         super(MultiBoxLoss, self).__init__()
 
-        self.num_classes = num_classes
+        self.n_classes = n_classes
         self.threshold = min_overlap
         self.negpos_ratio = neg_pos
+        self.in_dim = input_dimensions
+        self.obj_size = float(object_size)
         self.use_gpu = use_gpu
         self.variance = [.1, .2]
 
     def forward(self, predictions, targets):
-        """Multibox Loss
+        """Multibox loss calculation
         Args:
-            predictions (tuple): A tuple containing loc preds, conf preds,
-            regr_preds and prior boxes from SSD net.
-                conf shape: torch.size(batch_size,num_priors,num_classes)
-                loc shape: torch.size(batch_size,num_priors,4)
-                regr shape: torch.size(batch_size,num_priors,1)
-                priors shape: torch.size(num_priors,4)
-
-            targets (tensor): Ground truth boxes and labels for a batch,
-                shape: [batch_size,num_objs,6].
+            predictions: a tuple containing loc preds, conf preds, regr_preds
+                         and prior boxes from SSD net.
+                conf shape:   [batch_size, num_priors, n_classes]
+                loc shape:    [batch_size, num_priors, 4]
+                regr shape:   [batch_size, num_priors, 1]
+                priors shape: [num_priors, 4]
+            targets (tensor): ground truth boxes and labels for a batch,
+                shape: [batch_size, num_objs, 6].
+        Outputs:
+            loss_l: localization loss
+            loss_c: classification loss
+            loss_r: regression loss
         """
-        loc_data, conf_data, regr_data, priors = predictions
-        num = loc_data.size(0)
-        priors = priors[:loc_data.size(1), :]
-        num_priors = (priors.size(0))
-        num_classes = self.num_classes
 
-        # match priors (default boxes) and ground truth boxes
-        loc_t = torch.Tensor(num, num_priors, 4)
-        conf_t = torch.LongTensor(num, num_priors)
-        regr_t = torch.Tensor(num, num_priors, 1)
-        for idx in range(num):
-            truths = targets[idx][:, :4].data
-            labels = targets[idx][:, 4].data
-            regres = targets[idx][:, -1:].data
-            defaults = priors.data
-            match(self.threshold, truths, defaults, self.variance, labels,
+        loc_data, conf_data, regr_data, priors = predictions
+        priors = priors[:loc_data.size(1), :]
+        defaults = priors.data
+
+        bs = loc_data.size(0)  # batch size
+        n_priors = priors.size(0)  # number of priors
+
+        # Match priors with ground truth boxes
+        loc_t = torch.Tensor(bs, n_priors, 4)
+        conf_t = torch.LongTensor(bs, n_priors)
+        regr_t = torch.Tensor(bs, n_priors, 1)
+        for idx in range(bs):
+            coords = targets[idx][:, :4].data  # truth coordinates
+            labels = targets[idx][:, 4].data  # truth labels
+            regres = targets[idx][:, -1:].data  # truth auxiliary regression
+            match(self.threshold, coords, defaults, self.variance, labels,
                   regres, loc_t, conf_t, regr_t, idx)
         if self.use_gpu:
             loc_t = loc_t.cuda()
             conf_t = conf_t.cuda()
             regr_t = regr_t.cuda()
-        # wrap targets
         loc_t = Variable(loc_t, requires_grad=False)
         conf_t = Variable(conf_t, requires_grad=False)
         regr_t = Variable(regr_t, requires_grad=False)
 
+        # Mask confidence
         pos = conf_t > 0
         num_pos = pos.sum(dim=1, keepdim=True)
 
         # Localization Loss (Smooth L1)
-        # Shape: [batch,num_priors,4]
-        loc_p = torch.Tensor(num, num_priors, 4)
-        loc_p[:, :, :2] = loc_data
-        loc_p[:, :, 2] = 46./340  # add fixed width
-        loc_p[:, :, 3] = 46./360  # add fixed height
-
-        # Mask by confidence
+        loc_p = torch.Tensor(bs, n_priors, 4)
+        loc_p[:, :, :2] = loc_data  # set x and y coordinates
+        loc_p[:, :, 2] = self.obj_size/self.in_dim[1]  # add fixed width
+        loc_p[:, :, 3] = self.obj_size/self.in_dim[0]  # add fixed height
         pos_idx = pos.unsqueeze(pos.dim()).expand_as(loc_p)
         loc_p = loc_p[pos_idx].view(-1, 4)
         loc_t = loc_t[pos_idx].view(-1, 4)
         loss_l = F.smooth_l1_loss(loc_p, loc_t, reduction='sum')
 
         # Compute max conf across batch for hard negative mining
-        b_conf = conf_data.view(-1, self.num_classes)
+        b_conf = conf_data.view(-1, self.n_classes)
         loss_c = log_sum_exp(b_conf) - b_conf.gather(1, conf_t.view(-1, 1))
-
-        # Hard Negative Mining
-        loss_c = loss_c.view(num, -1)
-        loss_c[pos] = 0  # filter out pos boxes for now
+        loss_c = loss_c.view(bs, -1)
+        loss_c[pos] = 0  # filter out pos boxes
         _, loss_idx = loss_c.sort(1, descending=True)
         _, idx_rank = loss_idx.sort(1)
         num_pos = pos.long().sum(1, keepdim=True)
@@ -106,7 +98,7 @@ class MultiBoxLoss(nn.Module):
         # Confidence Loss Including Positive and Negative Examples
         pos_idx = pos.unsqueeze(2).expand_as(conf_data)
         neg_idx = neg.unsqueeze(2).expand_as(conf_data)
-        conf_p = conf_data[(pos_idx+neg_idx).gt(0)].view(-1, self.num_classes)
+        conf_p = conf_data[(pos_idx+neg_idx).gt(0)].view(-1, self.n_classes)
         targets_weighted = conf_t[(pos+neg).gt(0)]
         loss_c = F.cross_entropy(conf_p, targets_weighted, reduction='sum')
 

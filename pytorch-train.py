@@ -65,6 +65,8 @@ def execute(model_name, qtype, train_dataset_path, val_dataset_path, save_dir,
 
     num_classes += 1
     quantized = (qtype == 'binary') or (qtype == 'ternary')
+    input_dimensions = (360, 340)
+    jet_size = 46
     plot = Plotting(save_dir=save_dir)
 
     # Initialize dataset
@@ -74,7 +76,8 @@ def execute(model_name, qtype, train_dataset_path, val_dataset_path, save_dir,
                                       num_workers, shuffle=False)
 
     # Build SSD network
-    ssd_net = build_ssd('train', num_classes, qtype=qtype)
+    ssd_net = build_ssd('train', input_dimensions, num_classes, jet_size,
+                        qtype=qtype)
     print(ssd_net)
 
     # Initialize weights
@@ -112,7 +115,13 @@ def execute(model_name, qtype, train_dataset_path, val_dataset_path, save_dir,
                           momentum=momentum, weight_decay=weight_decay)
     cp_es = EarlyStopping(patience=es_patience,
                           save_path='%s/%s.pth' % (save_dir, model_name))
-    criterion = MultiBoxLoss(num_classes, overlap_threshold, 3, True)
+
+    criterion = MultiBoxLoss(num_classes,
+                             min_overlap=overlap_threshold,
+                             neg_pos=3,
+                             input_dimensions=input_dimensions,
+                             object_size=jet_size,
+                             use_gpu=True)
 
     train_loss, val_loss = torch.empty(3, 0), torch.empty(3, 0)
 

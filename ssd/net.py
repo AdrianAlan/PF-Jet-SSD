@@ -10,7 +10,7 @@ from torch.autograd import Variable
 
 class SSD(nn.Module):
 
-    def __init__(self, phase, base, extras, head, num_classes,
+    def __init__(self, phase, base, extras, head, num_classes, dim, obj_size,
                  top_k=200, min_confidence=0.01, nms=0.25):
         super(SSD, self).__init__()
 
@@ -25,12 +25,12 @@ class SSD(nn.Module):
         self.top_k = top_k
         self.min_confidence = min_confidence
         self.nms = nms
-        config = {'min_dim': (360, 340),
+        config = {'min_dim': dim,
                   'feature_maps_phi': [46, 22, 15, 8, 3, 1],
                   'feature_maps_eta': [44, 21, 14, 8, 3, 1],
                   'steps_phi': [8, 17, 24, 45, 120, 360],
                   'steps_eta': [8, 17, 25, 43, 114, 340],
-                  'size': 46}
+                  'size': obj_size}
         self.priors = Variable(self.priorbox.apply(config))
         self.L2Norm = L2Norm(256, 20)
 
@@ -174,7 +174,8 @@ def multibox(base, extras, num_mbox, num_classes, conv):
     return (loc, conf, regr)
 
 
-def build_ssd(phase, num_classes=5, qtype='full', num_mbox=1, in_channels=2):
+def build_ssd(phase, dimension, num_classes, object_size,
+              qtype='full', num_mbox=1, in_channels=2):
 
     if qtype == 'binary':
         conv = BinaryConv2d
@@ -190,4 +191,4 @@ def build_ssd(phase, num_classes=5, qtype='full', num_mbox=1, in_channels=2):
     extras = extra_layers(conv, acti)
     head = multibox(base, extras, num_mbox, num_classes, nn.Conv2d)
 
-    return SSD(phase, base, extras, head, num_classes)
+    return SSD(phase, base, extras, head, num_classes, dimension, object_size)
