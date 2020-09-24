@@ -56,7 +56,7 @@ def jaccard(box_a, box_b):
     return inter / union  # [A,B]
 
 
-def match(threshold, truths, priors, variances, labels, regres, loc_t, conf_t,
+def match(threshold, truths, priors, variance, labels, regres, loc_t, conf_t,
           regr_t, idx):
     """Match each prior box with the ground truth box of the highest jaccard
     overlap, encode the bounding boxes, then return the matched indices
@@ -65,8 +65,7 @@ def match(threshold, truths, priors, variances, labels, regres, loc_t, conf_t,
         threshold: (float) The overlap threshold used when mathing boxes.
         truths: (tensor) Ground truth boxes, Shape: [num_obj, num_priors].
         priors: (tensor) Prior boxes from priorbox layers, Shape: [n_priors,4].
-        variances: (tensor) Variances corresponding to each prior coord,
-            Shape: [num_priors, 4].
+        variance: (tensor) Prior coord variance.
         labels: (tensor) All the class labels for the image, Shape: [num_obj].
         loc_t: (tensor) Tensor to be filled w/ endcoded location targets.
         conf_t: (tensor) Tensor to be filled w/ matched indices for conf preds.
@@ -99,21 +98,21 @@ def match(threshold, truths, priors, variances, labels, regres, loc_t, conf_t,
     conf = labels[best_truth_idx] + 1         # Shape: [num_priors]
     regr = regres[best_truth_idx]             # Shape: [num_priors, 2]
     conf[best_truth_overlap < threshold] = 0  # label as background
-    loc = encode(matches, priors, variances)
+    loc = encode(matches, priors, variance)
     loc_t[idx] = loc    # [num_priors,4] encoded offsets to learn
     conf_t[idx] = conf  # [num_priors] top class label for each prior
     regr_t[idx] = regr    # [num_priors,2] regression values
 
 
-def encode(matched, priors, variances):
-    """Encode the variances from the priorbox layers into the ground truth
+def encode(matched, priors, variance):
+    """Encode the variance from the priorbox layers into the ground truth
     boxes we have matched (based on jaccard overlap) with the prior boxes.
     Args:
         matched: (tensor) Coords of ground truth for each prior in point-form
             Shape: [num_priors, 4].
         priors: (tensor) Prior boxes in center-offset form
             Shape: [num_priors,4].
-        variances: (list[float]) Variances of priorboxes
+        variance: (float) Variances of priorboxes
     Return:
         encoded boxes (tensor), Shape: [num_priors, 4]
     """
@@ -121,12 +120,8 @@ def encode(matched, priors, variances):
     # dist b/t match center and prior's center
     g_cxcy = (matched[:, :2] + matched[:, 2:])/2 - priors[:, :2]
     # encode variance
-    g_cxcy /= (variances[0] * priors[:, 2:])
-    # match wh / prior wh
-    g_wh = (matched[:, 2:] - matched[:, :2]) / priors[:, 2:]
-    g_wh = torch.log(g_wh) / variances[1]
-    # return target for smooth_l1_loss
-    return torch.cat([g_cxcy, g_wh], 1)  # [num_priors,4]
+    g_cxcy /= (variance * priors[:, 2:])
+    return g_cxcy
 
 
 # Adapted from https://github.com/Hakuyume/chainer-ssd

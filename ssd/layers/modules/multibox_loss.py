@@ -16,17 +16,14 @@ class MultiBoxLoss(nn.Module):
     a large number of default bounding boxes. https://arxiv.org/pdf/1512.02325
     """
 
-    def __init__(self, n_classes, min_overlap=0.5, neg_pos=3, object_size=46,
-                 input_dimensions=(360, 340), use_gpu=True):
+    def __init__(self, n_classes, min_overlap=0.5, neg_pos=3, use_gpu=True):
         super(MultiBoxLoss, self).__init__()
 
         self.n_classes = n_classes
         self.threshold = min_overlap
         self.negpos_ratio = neg_pos
-        self.in_dim = input_dimensions
-        self.obj_size = float(object_size)
         self.use_gpu = use_gpu
-        self.variance = [.1, .2]
+        self.variance = .1
 
     def forward(self, predictions, targets):
         """Multibox loss calculation
@@ -53,7 +50,7 @@ class MultiBoxLoss(nn.Module):
         n_priors = priors.size(0)  # number of priors
 
         # Match priors with ground truth boxes
-        loc_t = torch.Tensor(bs, n_priors, 4)
+        loc_t = torch.Tensor(bs, n_priors, 2)
         conf_t = torch.LongTensor(bs, n_priors)
         regr_t = torch.Tensor(bs, n_priors, 1)
         for idx in range(bs):
@@ -75,13 +72,9 @@ class MultiBoxLoss(nn.Module):
         num_pos = pos.sum(dim=1, keepdim=True)
 
         # Localization Loss (Smooth L1)
-        loc_p = torch.Tensor(bs, n_priors, 4)
-        loc_p[:, :, :2] = loc_data  # set x and y coordinates
-        loc_p[:, :, 2] = self.obj_size/self.in_dim[1]  # add fixed width
-        loc_p[:, :, 3] = self.obj_size/self.in_dim[0]  # add fixed height
-        pos_idx = pos.unsqueeze(pos.dim()).expand_as(loc_p)
-        loc_p = loc_p[pos_idx].view(-1, 4)
-        loc_t = loc_t[pos_idx].view(-1, 4)
+        pos_idx = pos.unsqueeze(pos.dim()).expand_as(loc_t)
+        loc_p = loc_data[pos_idx].view(-1, 2)
+        loc_t = loc_t[pos_idx].view(-1, 2)
         loss_l = F.smooth_l1_loss(loc_p, loc_t, reduction='sum')
 
         # Compute max conf across batch for hard negative mining

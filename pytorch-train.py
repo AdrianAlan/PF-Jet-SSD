@@ -115,13 +115,7 @@ def execute(model_name, qtype, train_dataset_path, val_dataset_path, save_dir,
                           momentum=momentum, weight_decay=weight_decay)
     cp_es = EarlyStopping(patience=es_patience,
                           save_path='%s/%s.pth' % (save_dir, model_name))
-
-    criterion = MultiBoxLoss(num_classes,
-                             min_overlap=overlap_threshold,
-                             neg_pos=3,
-                             input_dimensions=input_dimensions,
-                             object_size=jet_size,
-                             use_gpu=True)
+    criterion = MultiBoxLoss(num_classes, min_overlap=overlap_threshold)
 
     train_loss, val_loss = torch.empty(3, 0), torch.empty(3, 0)
 
