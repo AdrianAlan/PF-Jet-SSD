@@ -204,7 +204,9 @@ if __name__ == '__main__':
         net = net.cuda()
         cudnn.benchmark = True
 
-        macs = GetResources(net, dummy_input=torch.randn(1, 2, 340, 360))
+        mac = GetResources(net, dummy_input=torch.randn(1, 2, 340, 360))
+        ops = mac.profile() / 1e9
+        print('Total FLOPS {0:.3f}G, TERNARY {1:.3f}G'.format(ops[0], ops[1]))
 
         loader, h5 = get_data_loader(args.test_dataset,
                                      batch_size,
@@ -217,7 +219,6 @@ if __name__ == '__main__':
                                   overlap_threshold=args.overlap_threshold,
                                   jet_classes=jet_classes)
         print('')
-        print('Total OPS: {0:.3f}G'.format(macs.profile() / 1e9))
         print('Average inference time: {0:.3f} ms'.format(it/batch_size))
         for _, _, c, ap in res:
             print('Average precision for class {0}: {1:.3f}'.format(c, ap))
