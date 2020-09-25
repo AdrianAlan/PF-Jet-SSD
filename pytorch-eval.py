@@ -17,13 +17,11 @@ from tqdm import tqdm
 from utils import Plotting, GetResources
 
 
-def detection_collate(batch):
-    targets = []
-    imgs = []
-    for sample in batch:
-        imgs.append(sample[0])
-        targets.append(torch.FloatTensor(sample[1]))
-    return torch.stack(imgs, 0), targets
+def collate_fn(batch):
+    transposed_data = list(zip(*batch))
+    inp = torch.stack(transposed_data[0], 0)
+    tgt = list(transposed_data[1])
+    return inp, tgt
 
 
 def get_data_loader(source_path, batch_size, num_workers, shuffle=False):
@@ -31,7 +29,7 @@ def get_data_loader(source_path, batch_size, num_workers, shuffle=False):
     generator = CalorimeterJetDataset(hdf5_dataset=h5, return_pt=True)
     return torch.utils.data.DataLoader(generator,
                                        batch_size=batch_size,
-                                       collate_fn=detection_collate,
+                                       collate_fn=collate_fn,
                                        shuffle=shuffle,
                                        num_workers=num_workers), h5
 
@@ -57,15 +55,14 @@ def test_net(model, dataset, im_size, conf_threshold=0., batch_size=50,
 
             for idx in range(batch_size):
                 detections, targets = pred[idx].cuda(), y[idx].cuda()
-                targets[:, 0] *= im_size[0]
-                targets[:, 2] *= im_size[0]
-                targets[:, 1] *= im_size[1]
-                targets[:, 3] *= im_size[1]
-
+                targets[:, 0] *= im_size[1]
+                targets[:, 2] *= im_size[1]
+                targets[:, 1] *= im_size[0]
+                targets[:, 3] *= im_size[0]
                 all_dets = torch.empty((0, 8))
 
-                for j in range(1, detections.size(0)):
-                    dets = detections[j, :]
+                for class_id in range(1, detections.size(0)):
+                    dets = detections[class_id, :]
 
                     # Filter detections above given threshold
                     dets = dets[dets[:, 0] > conf_threshold]
@@ -74,14 +71,14 @@ def test_net(model, dataset, im_size, conf_threshold=0., batch_size=50,
                         continue
 
                     boxes = dets[:, 1:5]
-                    boxes[:, 0] *= im_size[0]
-                    boxes[:, 2] *= im_size[0]
-                    boxes[:, 1] *= im_size[1]
-                    boxes[:, 3] *= im_size[1]
+                    boxes[:, 0] *= im_size[1]
+                    boxes[:, 2] *= im_size[1]
+                    boxes[:, 1] *= im_size[0]
+                    boxes[:, 3] *= im_size[0]
 
                     scores = dets[:, 0].unsqueeze(1)
                     regres = dets[:, -1].unsqueeze(1)
-                    labels = (j-1)*torch.ones(len(scores)).unsqueeze(1)
+                    labels = (class_id-1)*torch.ones(len(scores)).unsqueeze(1)
                     gt = torch.zeros(len(scores)).unsqueeze(1)
 
                     # Format: [xmin, ymin, xmax, ymax, label, score, gt, m]
@@ -189,8 +186,9 @@ if __name__ == '__main__':
     dir_plot = args.out_plot_dir
     num_classes = args.num_classes
     jet_classes = ['b', 'H-W', 't']
-    im_size = (340, 360)
+    im_size = (360, 340)
     top_k = 10
+    jet_size = 46.
     batch_size = 100
     num_classes = num_classes + 1  # +1 for background
 
@@ -200,7 +198,7 @@ if __name__ == '__main__':
     for qtype, source_path in [('full', args.fpn_source_path),
                                ('ternary', args.twn_source_path)]:
         print('Testing {0} precision network model'.format(qtype))
-        net = build_ssd('test', num_classes, qtype)
+        net = build_ssd('test', im_size, num_classes, jet_size, qtype=qtype)
         net.load_weights(source_path)
         net.eval()
         net = net.cuda()
