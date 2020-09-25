@@ -195,6 +195,10 @@ if __name__ == '__main__':
     plotting_results = []
     plotting_deltas = []
 
+    loader, h5 = get_data_loader(args.test_dataset, batch_size,
+                                 args.num_workers)
+
+
     for qtype, source_path in [('full', args.fpn_source_path),
                                ('ternary', args.twn_source_path)]:
         print('Testing {0} precision network model'.format(qtype))
@@ -207,10 +211,6 @@ if __name__ == '__main__':
         mac = GetResources(net, dummy_input=torch.randn(1, 2, 340, 360))
         ops = mac.profile() / 1e9
         print('Total FLOPS {0:.3f}G, TERNARY {1:.3f}G'.format(ops[0], ops[1]))
-
-        loader, h5 = get_data_loader(args.test_dataset,
-                                     batch_size,
-                                     args.num_workers)
 
         it, res, delta = test_net(net, loader, top_k=top_k,
                                   im_size=im_size,
