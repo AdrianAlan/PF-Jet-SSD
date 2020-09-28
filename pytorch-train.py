@@ -80,6 +80,9 @@ def execute(model_name, qtype, train_dataset_path, val_dataset_path, save_dir,
                         qtype=qtype)
     print(ssd_net)
 
+    with open('{}/{}.txt'.format(save_dir, model_name), 'w') as f:
+        f.write(str(ssd_net))
+
     # Initialize weights
     if trained_model_path:
         ssd_net.load_weights(trained_model_path)
