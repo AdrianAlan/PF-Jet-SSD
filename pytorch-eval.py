@@ -141,7 +141,7 @@ def test_net(model, dataset, im_size, conf_threshold=0., batch_size=50,
 
         progress_bar.close()
 
-        it = inf_time.mean()*1000
+        it = inf_time.mean()*1000/batch_size
 
         ret = []
         for c in range(len(jet_classes)):
@@ -164,6 +164,9 @@ if __name__ == '__main__':
     parser.add_argument('twn_source_path', type=str,
                         help='Ternary Weight Network model source path')
     parser.add_argument('test_dataset', type=str, help='Path to test dataset')
+    parser.add_argument('-b', '--batch-size', type=int, default=100,
+                        help='Number of test samples in a batch',
+                        dest='batch_size')
     parser.add_argument('-p', '--out_dir_path', type=str, default='./plots',
                         help='Path to output plot', dest='out_plot_dir')
     parser.add_argument('-c', '--classes', type=int, default=1,
@@ -189,15 +192,14 @@ if __name__ == '__main__':
     im_size = (360, 340)
     top_k = 10
     jet_size = 46.
-    batch_size = 100
     num_classes = num_classes + 1  # +1 for background
 
     plotting_results = []
     plotting_deltas = []
 
-    loader, h5 = get_data_loader(args.test_dataset, batch_size,
+    loader, h5 = get_data_loader(args.test_dataset,
+                                 args.batch_size,
                                  args.num_workers)
-
 
     for qtype, source_path in [('full', args.fpn_source_path),
                                ('ternary', args.twn_source_path)]:
@@ -214,12 +216,12 @@ if __name__ == '__main__':
 
         it, res, delta = test_net(net, loader, top_k=top_k,
                                   im_size=im_size,
-                                  batch_size=batch_size,
+                                  batch_size=args.batch_size,
                                   conf_threshold=args.confidence_threshold,
                                   overlap_threshold=args.overlap_threshold,
                                   jet_classes=jet_classes)
         print('')
-        print('Average inference time: {0:.3f} ms'.format(it/batch_size))
+        print('Average inference time: {0:.3f} ms'.format(it))
         for _, _, c, ap in res:
             print('Average precision for class {0}: {1:.3f}'.format(c, ap))
 
