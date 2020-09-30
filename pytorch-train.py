@@ -11,6 +11,7 @@ import torch.backends.cudnn as cudnn
 import torch.nn.init as init
 import torch.utils.data as data
 import tqdm
+import yaml
 
 from tqdm import trange
 from torch.autograd import Variable
@@ -22,9 +23,11 @@ from ssd.net import build_ssd
 from utils import Plotting
 
 
-def adjust_learning_rate(optimizer, lr):
-    for param_group in optimizer.param_groups:
-        param_group['lr'] = lr
+def adjust_learning_rate(optimizer, epoch, learning_rates):
+    for step in learning_rates:
+        if step['epoch'] == epoch:
+            for param_group in optimizer.param_groups:
+                param_group['lr'] = step['rate']
 
 
 def collate_fn(batch):
@@ -59,28 +62,28 @@ def batch_step(x, y, optimizer, net, criterion):
     return criterion(output, y)
 
 
-def execute(model_name, qtype, train_dataset_path, val_dataset_path, save_dir,
-            num_classes, num_workers, batch_size, train_epochs,
-            overlap_threshold=0.5, es_patience=20, trained_model_path=None):
+def execute(model_name, qtype, dataset, output, training_pref, ssd_settings,
+            trained_model_path=None):
 
-    num_classes += 1
+    num_classes = ssd_settings['n_classes'] + 1
     quantized = (qtype == 'binary') or (qtype == 'ternary')
-    input_dimensions = (360, 340)
-    jet_size = 46
-    plot = Plotting(save_dir=save_dir)
+    plot = Plotting(save_dir=output['plots'])
 
     # Initialize dataset
-    train_loader, h5t = get_data_loader(train_dataset_path, batch_size,
-                                        num_workers)
-    val_loader, h5v = get_data_loader(val_dataset_path, batch_size,
-                                      num_workers, shuffle=False)
+    train_loader, h5t = get_data_loader(dataset['train'],
+                                        training_pref['batch_size'],
+                                        training_pref['workers'])
+    val_loader, h5v = get_data_loader(dataset['validation'],
+                                      training_pref['batch_size'],
+                                      training_pref['workers'],
+                                      shuffle=False)
 
     # Build SSD network
-    ssd_net = build_ssd('train', input_dimensions, num_classes, jet_size,
-                        qtype=qtype)
+    ssd_net = build_ssd('train', ssd_settings['input_dimensions'],
+                        num_classes, ssd_settings['object_size'], qtype=qtype)
     print(ssd_net)
 
-    with open('{}/{}.txt'.format(save_dir, model_name), 'w') as f:
+    with open('{}/{}.txt'.format(output['model'], model_name), 'w') as f:
         f.write(str(ssd_net))
 
     # Initialize weights
@@ -102,34 +105,23 @@ def execute(model_name, qtype, train_dataset_path, val_dataset_path, save_dir,
     print('Total network parameters: %s' % total_params)
 
     # Set training objective parameters
-    if quantized:
-        lr = 1e-3
-        momentum = 0.9
-        weight_decay = 5e-4
-        lrs = [5e-4, 1e-4, 5e-5, 1e-5]
-        lr_steps = [20, 30, 40, 45]
-    else:
-        lr = 1e-3
-        momentum = 0.9
-        weight_decay = 5e-4
-        lrs = [5e-4, 1e-4, 5e-5, 1e-5]
-        lr_steps = [20, 30, 40, 45]
-    optimizer = optim.SGD(net.parameters(), lr=lr,
-                          momentum=momentum, weight_decay=weight_decay)
-    cp_es = EarlyStopping(patience=es_patience,
-                          save_path='%s/%s.pth' % (save_dir, model_name))
-    criterion = MultiBoxLoss(num_classes, min_overlap=overlap_threshold)
+    optimizer = optim.SGD(net.parameters(), lr=1e-3,
+                          momentum=training_pref['momentum'],
+                          weight_decay=training_pref['weight_decay'])
+    cp_es = EarlyStopping(patience=training_pref['patience'],
+                          save_path='%s/%s.pth' % (output['model'], model_name))
+    criterion = MultiBoxLoss(num_classes,
+                             min_overlap=ssd_settings['overlap_threshold'])
 
     train_loss, val_loss = torch.empty(3, 0), torch.empty(3, 0)
 
-    for epoch in range(1, train_epochs+1):
+    for epoch in range(1, training_pref['max_epochs']+1):
 
-        if epoch in lr_steps:
-            new_lr = lrs[lr_steps.index(epoch)]
-            adjust_learning_rate(optimizer, new_lr)
+        adjust_learning_rate(optimizer, epoch, training_pref['learning_rates'])
 
         # Start model training
-        tr = trange(len(train_loader)*batch_size, file=sys.stdout)
+        tr = trange(len(train_loader)*training_pref['batch_size'],
+                    file=sys.stdout)
         tr.set_description('Epoch {}'.format(epoch))
         all_epoch_loss = torch.zeros(3)
         net.train()
@@ -166,7 +158,8 @@ def execute(model_name, qtype, train_dataset_path, val_dataset_path, save_dir,
         tr.close()
 
         # Start model validation
-        tr = trange(len(val_loader)*batch_size, file=sys.stdout)
+        tr = trange(len(val_loader)*training_pref['batch_size'],
+                    file=sys.stdout)
         tr.set_description('Validation')
         all_epoch_loss = torch.zeros(3)
         net.eval()
@@ -206,29 +199,12 @@ if __name__ == '__main__':
     parser.add_argument('qtype', type=str,
                         choices={'full', 'ternary', 'binary'},
                         help='Type of quantization')
-    parser.add_argument('train_dataset', type=str,
-                        help='Path to training dataset')
-    parser.add_argument('validation_dataset', type=str,
-                        help='Path to validation dataset')
-    parser.add_argument('-s', '--save-dir', type=str, default='./models',
-                        help='Path to save directory', dest='save_dir')
-    parser.add_argument('-c', '--classes', type=int, default=3,
-                        help='Number of target classes', dest='num_classes')
-    parser.add_argument('-w', '--workers', type=int, default=1,
-                        help='Number of workers', dest='num_workers')
-    parser.add_argument('-b', '--batch-size', type=int, default=50,
-                        help='Number of training samples in a batch',
-                        dest='batch_size')
-    parser.add_argument('-e', '--epochs', type=int, default=50,
-                        help='Number of training epochs', dest='train_epochs')
-    parser.add_argument('-t', '--overlap-threshold', type=float, default='0.5',
-                        help='IoU threshold', dest='overlap_threshold')
-    parser.add_argument('-p', '--patience', type=int, default='20',
-                        help='Early stopping patince', dest='es_patience')
+    parser.add_argument('config', type=str, help="Path to config file")
     parser.add_argument('-m', '--pre-trained', type=str,
                         default=None, help='Path to pre-trained model',
                         dest='trained_model_path')
     args = parser.parse_args()
+    config = yaml.safe_load(open(args.config))
 
     if torch.cuda.is_available():
         torch.set_default_tensor_type('torch.cuda.FloatTensor')
@@ -237,13 +213,8 @@ if __name__ == '__main__':
 
     execute(args.name,
             args.qtype,
-            args.train_dataset,
-            args.validation_dataset,
-            args.save_dir,
-            args.num_classes,
-            args.num_workers,
-            args.batch_size,
-            args.train_epochs,
-            overlap_threshold=args.overlap_threshold,
-            es_patience=args.es_patience,
+            config['dataset'],
+            config['output'],
+            config['training_pref'],
+            config['ssd_settings'],
             trained_model_path=args.trained_model_path)

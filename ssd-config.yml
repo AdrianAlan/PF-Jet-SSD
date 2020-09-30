@@ -1,0 +1,36 @@
+---
+dataset:
+ train: /path/to/train
+ validation: /path/to/validation
+
+output:
+ model: ./models
+ plots: ./plots
+
+training_pref:
+ batch_size: 25
+ learning_rates:
+  - rate: .001
+    epoch: 1
+  - rate: .0005
+    epoch: 20
+  - rate: .0001
+    epoch: 30
+  - rate: .00005
+    epoch: 40
+  - rate: .00001
+    epoch: 45
+ max_epochs: 50
+ ax_epochs: 50
+ momentum: .9
+ patience: 20
+ weight_decay: 0.0005
+ workers: 1
+
+ssd_settings:
+ input_dimensions:
+  - 360
+  - 340
+ n_classes: 3
+ object_size: 46.
+ overlap_threshold: .5
