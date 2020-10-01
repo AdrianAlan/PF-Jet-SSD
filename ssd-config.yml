@@ -2,6 +2,7 @@
 dataset:
  train: /path/to/train
  validation: /path/to/validation
+ test: /path/to/test
 
 output:
  model: ./models
@@ -27,10 +28,20 @@ training_pref:
  weight_decay: 0.0005
  workers: 1
 
+evaluation_pref:
+ batch_size: 100
+ names_classes:
+  - 'b'
+  - 'W-H'
+  - 't'
+ workers: 1
+
 ssd_settings:
+ confidence_threshold: .01
  input_dimensions:
   - 360
   - 340
  n_classes: 3
  object_size: 46.
  overlap_threshold: .5
+ top_k: 100

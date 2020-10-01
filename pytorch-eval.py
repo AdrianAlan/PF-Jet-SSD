@@ -8,6 +8,7 @@ import torch.nn as nn
 import torch.backends.cudnn as cudnn
 import torch.utils.data as data
 import sys
+import yaml
 
 from sklearn.metrics import average_precision_score, precision_recall_curve
 from ssd.generator import CalorimeterJetDataset
@@ -35,9 +36,9 @@ def get_data_loader(source_path, batch_size, num_workers, shuffle=False):
 
 
 def test_net(model, dataset, im_size, conf_threshold=0., batch_size=50,
-             overlap_threshold=.1, jet_classes=[], epsilon=10**-6, top_k=200):
+             overlap_threshold=.1, num_classes=3, epsilon=10**-6, top_k=200):
 
-    results = [torch.empty(0, 2) for _ in jet_classes]
+    results = [torch.empty(0, 2) for _ in range(num_classes)]
     deltas = torch.empty((0, 5))
     inf_time = torch.empty(0)
 
@@ -133,7 +134,7 @@ def test_net(model, dataset, im_size, conf_threshold=0., batch_size=50,
                                         torch.Tensor([0, 1, 1]))).unsqueeze(0)
                         all_dets = torch.cat((all_dets, fn))
 
-                for c in range(len(jet_classes)):
+                for c in range(num_classes):
                     cls_dets = all_dets[all_dets[:, 4] == c]
                     results[c] = torch.cat((results[c], cls_dets[:, [6, 5]]))
 
@@ -144,12 +145,12 @@ def test_net(model, dataset, im_size, conf_threshold=0., batch_size=50,
         it = inf_time.mean()*1000/batch_size
 
         ret = []
-        for c in range(len(jet_classes)):
+        for c in range(num_classes):
             truth = results[c][:, 0].cpu().numpy()
             score = results[c][:, 1].cpu().numpy()
             p, r, _ = precision_recall_curve(truth, score)
             ap = average_precision_score(truth, score)
-            ret.append((r, p, jet_classes[c], ap))
+            ret.append((r, p, c, ap))
 
         deltas = torch.abs(deltas)
 
@@ -163,48 +164,37 @@ if __name__ == '__main__':
                         help='Full Precision Network model source path')
     parser.add_argument('twn_source_path', type=str,
                         help='Ternary Weight Network model source path')
-    parser.add_argument('test_dataset', type=str, help='Path to test dataset')
-    parser.add_argument('-b', '--batch-size', type=int, default=100,
-                        help='Number of test samples in a batch',
-                        dest='batch_size')
-    parser.add_argument('-p', '--out_dir_path', type=str, default='./plots',
-                        help='Path to output plot', dest='out_plot_dir')
-    parser.add_argument('-c', '--classes', type=int, default=1,
-                        help='Number of target classes', dest='num_classes')
-    parser.add_argument('-w', '--workers', type=int, default=1,
-                        help='Number of workers', dest='num_workers')
-    parser.add_argument('-ot', '--overlap-threshold', type=float,
-                        default='0.5', help='IoU threshold',
-                        dest='overlap_threshold')
-    parser.add_argument('-ct', '--confidence-threshold', type=float,
-                        default='0.01', help='Confidence threshold',
-                        dest='confidence_threshold')
+    parser.add_argument('config', type=str, help="Path to config file")
     args = parser.parse_args()
+    config = yaml.safe_load(open(args.config))
 
     if torch.cuda.is_available():
         torch.set_default_tensor_type('torch.cuda.FloatTensor')
     else:
         torch.set_default_tensor_type('torch.FloatTensor')
 
-    dir_plot = args.out_plot_dir
-    num_classes = args.num_classes
-    jet_classes = ['b', 'H-W', 't']
-    im_size = (360, 340)
-    top_k = 10
-    jet_size = 46.
-    num_classes = num_classes + 1  # +1 for background
+    evaluation_pref = config['evaluation_pref']
+    ssd_settings = config['ssd_settings']
+    bs = evaluation_pref['batch_size']
+    jet_names = evaluation_pref['names_classes']
+    workers = evaluation_pref['workers']
+    ct = ssd_settings['confidence_threshold']
+    in_dim = ssd_settings['input_dimensions']
+    jet_size = ssd_settings['object_size']
+    num_classes = ssd_settings['n_classes']
+    ot = ssd_settings['overlap_threshold']
+    top_k = ssd_settings['top_k']
 
     plotting_results = []
     plotting_deltas = []
 
-    loader, h5 = get_data_loader(args.test_dataset,
-                                 args.batch_size,
-                                 args.num_workers)
+    loader, h5 = get_data_loader(config['dataset']['test'], bs, workers)
 
     for qtype, source_path in [('full', args.fpn_source_path),
                                ('ternary', args.twn_source_path)]:
         print('Testing {0} precision network model'.format(qtype))
-        net = build_ssd('test', im_size, num_classes, jet_size, qtype=qtype)
+        net = build_ssd('test', in_dim, num_classes + 1,
+                        ssd_settings['object_size'], qtype=qtype)
         net.load_weights(source_path)
         net.eval()
         net = net.cuda()
@@ -214,12 +204,10 @@ if __name__ == '__main__':
         ops = mac.profile() / 1e9
         print('Total FLOPS {0:.3f}G, TERNARY {1:.3f}G'.format(ops[0], ops[1]))
 
-        it, res, delta = test_net(net, loader, top_k=top_k,
-                                  im_size=im_size,
-                                  batch_size=args.batch_size,
-                                  conf_threshold=args.confidence_threshold,
-                                  overlap_threshold=args.overlap_threshold,
-                                  jet_classes=jet_classes)
+        it, res, delta = test_net(net, loader, batch_size=bs,
+                                  conf_threshold=ct, im_size=in_dim,
+                                  num_classes=num_classes,
+                                  overlap_threshold=ot, top_k=top_k)
         print('')
         print('Average inference time: {0:.3f} ms'.format(it))
         for _, _, c, ap in res:
@@ -228,8 +216,8 @@ if __name__ == '__main__':
         plotting_results.append(res)
         plotting_deltas.append(delta)
 
-    plot = Plotting(save_dir=dir_plot)
+    plot = Plotting(save_dir=config['output']['plots'])
     plot.draw_precision_recall(plotting_results)
-    plot.draw_loc_delta(plotting_deltas, jet_classes)
+    plot.draw_loc_delta(plotting_deltas, jet_names)
 
     h5.close()
