@@ -65,7 +65,7 @@ def batch_step(x, y, optimizer, net, criterion):
 def execute(model_name, qtype, dataset, output, training_pref, ssd_settings,
             trained_model_path=None):
 
-    num_classes = ssd_settings['n_classes'] + 1
+    ssd_settings['n_classes'] += 1
     quantized = (qtype == 'binary') or (qtype == 'ternary')
     plot = Plotting(save_dir=output['plots'])
 
@@ -79,8 +79,7 @@ def execute(model_name, qtype, dataset, output, training_pref, ssd_settings,
                                       shuffle=False)
 
     # Build SSD network
-    ssd_net = build_ssd('train', ssd_settings['input_dimensions'],
-                        num_classes, ssd_settings['object_size'], qtype=qtype)
+    ssd_net = build_ssd('train', ssd_settings, qtype=qtype)
     print(ssd_net)
 
     with open('{}/{}.txt'.format(output['model'], model_name), 'w') as f:
@@ -110,7 +109,7 @@ def execute(model_name, qtype, dataset, output, training_pref, ssd_settings,
                           weight_decay=training_pref['weight_decay'])
     cp_es = EarlyStopping(patience=training_pref['patience'],
                           save_path='%s/%s.pth' % (output['model'], model_name))
-    criterion = MultiBoxLoss(num_classes,
+    criterion = MultiBoxLoss(ssd_settings['n_classes'],
                              min_overlap=ssd_settings['overlap_threshold'])
 
     train_loss, val_loss = torch.empty(3, 0), torch.empty(3, 0)

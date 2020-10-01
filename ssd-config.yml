@@ -38,10 +38,38 @@ evaluation_pref:
 
 ssd_settings:
  confidence_threshold: .01
+ feature_maps:
+  - phi: 46
+    eta: 44
+  - phi: 22
+    eta: 21
+  - phi: 15
+    eta: 14
+  - phi: 8
+    eta: 8
+  - phi: 3
+    eta: 3
+  - phi: 1
+    eta: 1 
  input_dimensions:
+  - 2
   - 360
   - 340
  n_classes: 3
+ nms: .25
  object_size: 46.
  overlap_threshold: .5
+ steps:
+  - phi: 8
+    eta: 8
+  - phi: 17
+    eta: 17
+  - phi: 24
+    eta: 25
+  - phi: 45
+    eta: 43
+  - phi: 120
+    eta: 114
+  - phi: 360
+    eta: 340
  top_k: 100

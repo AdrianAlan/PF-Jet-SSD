@@ -181,6 +181,7 @@ if __name__ == '__main__':
     ct = ssd_settings['confidence_threshold']
     in_dim = ssd_settings['input_dimensions']
     jet_size = ssd_settings['object_size']
+    ssd_settings['n_classes'] += 1
     num_classes = ssd_settings['n_classes']
     ot = ssd_settings['overlap_threshold']
     top_k = ssd_settings['top_k']
@@ -193,8 +194,7 @@ if __name__ == '__main__':
     for qtype, source_path in [('full', args.fpn_source_path),
                                ('ternary', args.twn_source_path)]:
         print('Testing {0} precision network model'.format(qtype))
-        net = build_ssd('test', in_dim, num_classes + 1,
-                        ssd_settings['object_size'], qtype=qtype)
+        net = build_ssd('test', ssd_settings, qtype=qtype)
         net.load_weights(source_path)
         net.eval()
         net = net.cuda()
@@ -205,7 +205,7 @@ if __name__ == '__main__':
         print('Total FLOPS {0:.3f}G, TERNARY {1:.3f}G'.format(ops[0], ops[1]))
 
         it, res, delta = test_net(net, loader, batch_size=bs,
-                                  conf_threshold=ct, im_size=in_dim,
+                                  conf_threshold=ct, im_size=in_dim[1:],
                                   num_classes=num_classes,
                                   overlap_threshold=ot, top_k=top_k)
         print('')
