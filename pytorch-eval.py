@@ -56,10 +56,10 @@ def test_net(model, dataset, im_size, conf_threshold=0., batch_size=50,
 
             for idx in range(batch_size):
                 detections, targets = pred[idx].cuda(), y[idx].cuda()
-                targets[:, 0] *= im_size[1]
-                targets[:, 2] *= im_size[1]
-                targets[:, 1] *= im_size[0]
-                targets[:, 3] *= im_size[0]
+                targets[:, 0] *= im_size[0]
+                targets[:, 2] *= im_size[0]
+                targets[:, 1] *= im_size[1]
+                targets[:, 3] *= im_size[1]
                 all_dets = torch.empty((0, 8))
 
                 for class_id in range(1, detections.size(0)):
@@ -72,10 +72,10 @@ def test_net(model, dataset, im_size, conf_threshold=0., batch_size=50,
                         continue
 
                     boxes = dets[:, 1:5]
-                    boxes[:, 0] *= im_size[1]
-                    boxes[:, 2] *= im_size[1]
-                    boxes[:, 1] *= im_size[0]
-                    boxes[:, 3] *= im_size[0]
+                    boxes[:, 0] *= im_size[0]
+                    boxes[:, 2] *= im_size[0]
+                    boxes[:, 1] *= im_size[1]
+                    boxes[:, 3] *= im_size[1]
 
                     scores = dets[:, 0].unsqueeze(1)
                     regres = dets[:, -1].unsqueeze(1)

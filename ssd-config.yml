@@ -53,8 +53,8 @@ ssd_settings:
     eta: 1 
  input_dimensions:
   - 2
-  - 360
   - 340
+  - 360
  n_classes: 3
  nms: .25
  object_size: 46.

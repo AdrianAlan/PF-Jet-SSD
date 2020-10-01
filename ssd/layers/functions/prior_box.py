@@ -19,15 +19,15 @@ class PriorBox(Function):
         steps = config['steps']
         size = config['size']
 
-        s_k_max_x = size/image_size[1]
-        s_k_max_y = size/image_size[0]
+        s_k_max_x = size/image_size[0]
+        s_k_max_y = size/image_size[1]
 
         for maps, step in zip(feature_maps, steps):
 
             for i, j in product(range(maps['eta']), range(maps['phi'])):
 
-                f_k_x = image_size[1] / step['eta']
-                f_k_y = image_size[0] / step['phi']
+                f_k_x = image_size[0] / step['eta']
+                f_k_y = image_size[1] / step['phi']
 
                 cx = (i + 0.5) / f_k_x
                 cy = (j + 0.5) / f_k_y

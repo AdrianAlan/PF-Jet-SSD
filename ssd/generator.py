@@ -62,11 +62,11 @@ class CalorimeterJetDataset(torch.utils.data.Dataset):
         scaler = np.max(energy)
         energy = energy / scaler
 
-        i = torch.LongTensor([indices_channels, indices_phi, indices_eta])
+        i = torch.LongTensor([indices_channels, indices_eta, indices_phi])
         v = torch.FloatTensor(energy)
         pixels = torch.sparse.FloatTensor(i, v, torch.Size([self.channels,
-                                                            self.height,
-                                                            self.width]))
+                                                            self.width,
+                                                            self.height]))
 
         return pixels.to_dense(), scaler
 
