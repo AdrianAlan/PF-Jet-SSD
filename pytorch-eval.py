@@ -25,9 +25,11 @@ def collate_fn(batch):
     return inp, tgt
 
 
-def get_data_loader(source_path, batch_size, num_workers, shuffle=False):
+def get_data_loader(source_path, batch_size, num_workers, input_dimensions,
+                    object_size, shuffle=True):
     h5 = h5py.File(source_path, 'r')
-    generator = CalorimeterJetDataset(hdf5_dataset=h5, return_pt=True)
+    generator = CalorimeterJetDataset(input_dimensions, object_size,
+                                      hdf5_dataset=h5, return_pt=False)
     return torch.utils.data.DataLoader(generator,
                                        batch_size=batch_size,
                                        collate_fn=collate_fn,
@@ -189,7 +191,8 @@ if __name__ == '__main__':
     plotting_results = []
     plotting_deltas = []
 
-    loader, h5 = get_data_loader(config['dataset']['test'], bs, workers)
+    loader, h5 = get_data_loader(config['dataset']['test'],
+                                 bs, workers, in_dim, jet_size)
 
     for qtype, source_path in [('full', args.fpn_source_path),
                                ('ternary', args.twn_source_path)]:

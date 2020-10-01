@@ -5,15 +5,18 @@ import torch
 
 class CalorimeterJetDataset(torch.utils.data.Dataset):
 
-    def __init__(self, hdf5_dataset=None, return_pt=False):
+    def __init__(self, input_dimensions, object_size,
+                 hdf5_dataset=None, return_pt=False):
         """Generator for calorimeter and jet data"""
 
         self.hdf5_dataset = hdf5_dataset
         self.return_pt = return_pt
 
-        self.channels = 2  # Number of color channels of the input images
-        self.height = 360  # Height of the input images
-        self.width = 340  # Width of the input images
+        self.channels = input_dimensions[0]  # Number of channels
+        self.width = input_dimensions[1]  # Width of input
+        self.height = input_dimensions[2]  # Height of input
+
+        self.size = object_size / 2
 
         self.labels = self.hdf5_dataset['labels']
 
@@ -32,10 +35,10 @@ class CalorimeterJetDataset(torch.utils.data.Dataset):
         labels = torch.empty_like(labels_reshaped, dtype=torch.float32)
 
         # Set fractional coordinates
-        labels[:, 0] = (labels_reshaped[:, 1] - 23) / float(self.width)
-        labels[:, 1] = (labels_reshaped[:, 2] - 23) / float(self.height)
-        labels[:, 2] = (labels_reshaped[:, 1] + 23) / float(self.width)
-        labels[:, 3] = (labels_reshaped[:, 2] + 23) / float(self.height)
+        labels[:, 0] = (labels_reshaped[:, 1] - self.size) / float(self.width)
+        labels[:, 1] = (labels_reshaped[:, 2] - self.size) / float(self.height)
+        labels[:, 2] = (labels_reshaped[:, 1] + self.size) / float(self.width)
+        labels[:, 3] = (labels_reshaped[:, 2] + self.size) / float(self.height)
 
         # Set class label
         labels[:, 4] = labels_reshaped[:, 0]

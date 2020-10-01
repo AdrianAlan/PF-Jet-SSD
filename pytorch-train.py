@@ -43,9 +43,11 @@ def weights_init(m):
         m.bias.data.zero_()
 
 
-def get_data_loader(source_path, batch_size, num_workers, shuffle=True):
+def get_data_loader(source_path, batch_size, num_workers, input_dimensions,
+                    object_size, shuffle=True):
     h5 = h5py.File(source_path, 'r')
-    generator = CalorimeterJetDataset(hdf5_dataset=h5)
+    generator = CalorimeterJetDataset(input_dimensions, object_size,
+                                      hdf5_dataset=h5)
     return torch.utils.data.DataLoader(generator,
                                        batch_size=batch_size,
                                        collate_fn=collate_fn,
@@ -72,10 +74,14 @@ def execute(model_name, qtype, dataset, output, training_pref, ssd_settings,
     # Initialize dataset
     train_loader, h5t = get_data_loader(dataset['train'],
                                         training_pref['batch_size'],
-                                        training_pref['workers'])
+                                        training_pref['workers'],
+                                        ssd_settings['input_dimensions'],
+                                        ssd_settings['object_size'])
     val_loader, h5v = get_data_loader(dataset['validation'],
                                       training_pref['batch_size'],
                                       training_pref['workers'],
+                                      ssd_settings['input_dimensions'],
+                                      ssd_settings['object_size'],
                                       shuffle=False)
 
     # Build SSD network
