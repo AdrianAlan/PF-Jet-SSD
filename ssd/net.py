@@ -146,32 +146,28 @@ def extra_layers(conv, acti):
             conv(64, 128, kernel_size=3)]
 
 
-def multibox(base, extras, num_mbox, num_classes, conv):
+def multibox(base, extras, num_classes, conv):
     loc, conf, regr = [], [], []
 
     base_sources = [27, 47]
     extra_sources = [4, 11, 18, 24]
 
     for k, v in enumerate(base_sources):
-        loc += [conv(base[v].out_channels, num_mbox * 2,
-                kernel_size=3, padding=1)]
-        conf += [conv(base[v].out_channels, num_mbox * num_classes,
+        loc += [conv(base[v].out_channels, 2, kernel_size=3, padding=1)]
+        conf += [conv(base[v].out_channels, num_classes,
                  kernel_size=3, padding=1)]
-        regr += [conv(base[v].out_channels, num_mbox * 1,
-                 kernel_size=3, padding=1)]
+        regr += [conv(base[v].out_channels, 1, kernel_size=3, padding=1)]
 
     for k, v in enumerate(extra_sources):
-        loc += [conv(extras[v].out_channels, num_mbox * 2,
-                kernel_size=3, padding=1)]
-        conf += [conv(extras[v].out_channels, num_mbox * num_classes,
+        loc += [conv(extras[v].out_channels, 2, kernel_size=3, padding=1)]
+        conf += [conv(extras[v].out_channels, num_classes,
                  kernel_size=3, padding=1)]
-        regr += [conv(extras[v].out_channels, num_mbox * 1,
-                 kernel_size=3, padding=1)]
+        regr += [conv(extras[v].out_channels, 1, kernel_size=3, padding=1)]
 
     return (loc, conf, regr)
 
 
-def build_ssd(phase, ssd_settings, qtype='full', num_mbox=1):
+def build_ssd(phase, ssd_settings, qtype='full'):
 
     if qtype == 'binary':
         conv = BinaryConv2d
@@ -187,6 +183,6 @@ def build_ssd(phase, ssd_settings, qtype='full', num_mbox=1):
 
     base = vgg(input_dimensions[0], conv, acti)
     extras = extra_layers(conv, acti)
-    head = multibox(base, extras, num_mbox, ssd_settings['n_classes'], nn.Conv2d)
+    head = multibox(base, extras, ssd_settings['n_classes'], nn.Conv2d)
 
     return SSD(phase, base, extras, head, ssd_settings)
