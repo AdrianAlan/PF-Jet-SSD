@@ -183,8 +183,8 @@ if __name__ == '__main__':
     ct = ssd_settings['confidence_threshold']
     in_dim = ssd_settings['input_dimensions']
     jet_size = ssd_settings['object_size']
-    ssd_settings['n_classes'] += 1
     num_classes = ssd_settings['n_classes']
+    ssd_settings['n_classes'] += 1
     ot = ssd_settings['overlap_threshold']
     top_k = ssd_settings['top_k']
 
