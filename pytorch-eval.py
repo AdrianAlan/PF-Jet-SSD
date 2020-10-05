@@ -29,7 +29,7 @@ def get_data_loader(source_path, batch_size, num_workers, input_dimensions,
                     object_size, shuffle=True):
     h5 = h5py.File(source_path, 'r')
     generator = CalorimeterJetDataset(input_dimensions, object_size,
-                                      hdf5_dataset=h5, return_pt=False)
+                                      hdf5_dataset=h5, return_pt=True)
     return torch.utils.data.DataLoader(generator,
                                        batch_size=batch_size,
                                        collate_fn=collate_fn,
