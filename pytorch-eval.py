@@ -46,8 +46,7 @@ def test_net(model, dataset, im_size, conf_threshold=0., batch_size=50,
 
     with torch.no_grad():
 
-        progress_bar = tqdm(total=batch_size*len(dataset),
-                            desc='Evaluating events')
+        progress_bar = tqdm(total=len(dataset), desc='Evaluating events')
 
         for X, y in dataset:
 
@@ -140,7 +139,7 @@ def test_net(model, dataset, im_size, conf_threshold=0., batch_size=50,
                     cls_dets = all_dets[all_dets[:, 4] == c]
                     results[c] = torch.cat((results[c], cls_dets[:, [6, 5]]))
 
-            progress_bar.update(batch_size)
+            progress_bar.update(1)
 
         progress_bar.close()
 

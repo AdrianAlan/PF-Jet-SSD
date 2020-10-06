@@ -125,8 +125,7 @@ def execute(model_name, qtype, dataset, output, training_pref, ssd_settings,
         adjust_learning_rate(optimizer, epoch, training_pref['learning_rates'])
 
         # Start model training
-        tr = trange(len(train_loader)*training_pref['batch_size'],
-                    file=sys.stdout)
+        tr = trange(len(train_loader), file=sys.stdout)
         tr.set_description('Epoch {}'.format(epoch))
         all_epoch_loss = torch.zeros(3)
         net.train()
@@ -157,14 +156,13 @@ def execute(model_name, qtype, dataset, output, training_pref, ssd_settings,
                  'Classification {:.5f} Regresion {:.5f}').format(
                  epoch, av_epoch_loss.sum(), av_epoch_loss[0],
                  av_epoch_loss[1], av_epoch_loss[2]))
-            tr.update(len(images))
+            tr.update(1)
 
         train_loss = torch.cat((train_loss, av_epoch_loss.unsqueeze(1)), 1)
         tr.close()
 
         # Start model validation
-        tr = trange(len(val_loader)*training_pref['batch_size'],
-                    file=sys.stdout)
+        tr = trange(len(val_loader), file=sys.stdout)
         tr.set_description('Validation')
         all_epoch_loss = torch.zeros(3)
         net.eval()
@@ -181,7 +179,7 @@ def execute(model_name, qtype, dataset, output, training_pref, ssd_settings,
                      'Classification {:.5f} Regresion {:.5f}').format(
                      av_epoch_loss.sum(), av_epoch_loss[0], av_epoch_loss[1],
                      av_epoch_loss[2]))
-                tr.update(len(images))
+                tr.update(1)
 
             val_loss = torch.cat((val_loss, av_epoch_loss.unsqueeze(1)), 1)
             tr.close()
