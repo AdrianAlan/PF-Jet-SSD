@@ -22,7 +22,6 @@ training_pref:
   - rate: .00001
     epoch: 45
  max_epochs: 50
- ax_epochs: 50
  momentum: .9
  patience: 20
  weight_decay: 0.0005
