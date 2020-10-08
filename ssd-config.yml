@@ -46,10 +46,6 @@ ssd_settings:
     eta: 14
   - phi: 8
     eta: 8
-  - phi: 3
-    eta: 3
-  - phi: 1
-    eta: 1 
  input_dimensions:
   - 2
   - 340
@@ -67,8 +63,4 @@ ssd_settings:
     eta: 25
   - phi: 45
     eta: 43
-  - phi: 120
-    eta: 114
-  - phi: 360
-    eta: 340
  top_k: 100

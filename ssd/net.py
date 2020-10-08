@@ -51,7 +51,7 @@ class SSD(nn.Module):
         # Add extra layers
         for k, v in enumerate(self.extras):
             x = v(x)
-            if k in [4, 11, 18, 24]:
+            if k in [4, 11]:
                 sources.append(F.relu(x, inplace=True))
 
         # Apply multibox head to source layers
@@ -130,27 +130,14 @@ def extra_layers(conv, acti):
             conv(256, 64, kernel_size=1),
             nn.BatchNorm2d(64),
             acti(64),
-            conv(64, 128, kernel_size=3, stride=1, padding=1),
-            nn.BatchNorm2d(128),
-            acti(128),
-            nn.AvgPool2d(kernel_size=2, stride=2, padding=1),
-            conv(128, 64, kernel_size=1),
-            nn.BatchNorm2d(64),
-            acti(64),
-            conv(64, 128, kernel_size=3),
-            nn.BatchNorm2d(128),
-            acti(128),
-            conv(128, 64, kernel_size=1),
-            nn.BatchNorm2d(64),
-            acti(64),
-            conv(64, 128, kernel_size=3)]
+            conv(64, 128, kernel_size=3, stride=1, padding=1)]
 
 
 def multibox(base, extras, num_classes, conv):
     loc, conf, regr = [], [], []
 
     base_sources = [27, 47]
-    extra_sources = [4, 11, 18, 24]
+    extra_sources = [4, 11]
 
     for k, v in enumerate(base_sources):
         loc += [conv(base[v].out_channels, 2, kernel_size=3, padding=1)]
