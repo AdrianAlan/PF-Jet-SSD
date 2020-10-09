@@ -219,7 +219,7 @@ if __name__ == '__main__':
         plotting_deltas.append(delta)
 
     plot = Plotting(save_dir=config['output']['plots'])
-    plot.draw_precision_recall(plotting_results)
+    plot.draw_precision_recall(plotting_results, jet_names)
     plot.draw_loc_delta(plotting_deltas, jet_names)
 
     h5.close()

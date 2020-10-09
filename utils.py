@@ -64,7 +64,7 @@ class Plotting():
         fig.savefig('%s/loss-%s' % (self.save_dir, type))
         plt.close(fig)
 
-    def draw_precision_recall(self, data):
+    def draw_precision_recall(self, data, names):
         """Plots the precision recall curve"""
 
         fig, ax = plt.subplots()
@@ -74,7 +74,7 @@ class Plotting():
 
         for q, data_model in enumerate(data):
             shade = 'shade_800' if q else 'shade_500'
-            for x, (recall, precision, jet, ap) in enumerate(data_model):
+            for x, (recall, precision, c, ap) in enumerate(data_model):
                 # Helper line
                 ref_precision = np.round(
                     precision[(np.abs(recall - self.ref_recall)).argmin()], 2)
@@ -91,7 +91,7 @@ class Plotting():
                          linestyle=self.line_styles[q],
                          color=self.colors[x][shade],
                          label='{0}: {1} jets, AP: {2:.3f}'.format(
-                                 self.legend[q], jet, ap))
+                                 self.legend[q], names[c], ap))
 
         # Helper line c.d.
         plt.xticks(list(plt.xticks()[0]) + [self.ref_recall])
@@ -116,7 +116,7 @@ class Plotting():
         fig.savefig('%s/pr-curve' % self.save_dir)
         plt.close(fig)
 
-    def draw_loc_delta(self, data, classes, width=[.1, .05, .03], nbins=15):
+    def draw_loc_delta(self, data, names, width=[.1, .05, .03], nbins=15):
         """Plots the localization delta in eta, phi and mass"""
 
         def get_width(p, w):
@@ -133,7 +133,7 @@ class Plotting():
                 return Line2D([0], [0], color=self.colors[x][shade],
                               label=label, linestyle=self.line_styles[q])
 
-        for x, (c, w) in enumerate(zip(classes, width)):
+        for x, (c, w) in enumerate(zip(names, width)):
 
             for idx, lbl, n in [(2, r'$\sigma(\eta_{SSD}-\eta_{GT})$', 'eta'),
                                 (3, r'$\sigma(\phi_{SSD}-\phi_{GT})$', 'phi'),
