@@ -202,7 +202,9 @@ if __name__ == '__main__':
         net = net.cuda()
         cudnn.benchmark = True
 
-        mac = GetResources(net, dummy_input=torch.randn(1, 2, 340, 360))
+        mac = GetResources(net, 
+                           dummy_input=torch.unsqueeze(torch.randn(in_dim), 
+                                                       0))
         ops = mac.profile() / 1e9
         print('Total FLOPS {0:.3f}G, TERNARY {1:.3f}G'.format(ops[0], ops[1]))
 
