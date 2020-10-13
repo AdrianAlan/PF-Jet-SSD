@@ -29,7 +29,10 @@ class SSD(nn.Module):
                   'steps': ssd_settings['steps'],
                   'size': ssd_settings['object_size']}
         self.priors = Variable(self.priorbox.apply(config))
-        self.L2Norm = L2Norm(256, 20)
+        self.L2Norm1 = L2Norm(256, 20)
+        self.L2Norm2 = L2Norm(512, 20)
+        self.L2Norm3 = L2Norm(256, 20)
+        self.L2Norm4 = L2Norm(128, 20)
 
         if phase == 'test':
             self.softmax = nn.Softmax(dim=-1)
@@ -43,16 +46,18 @@ class SSD(nn.Module):
         # Add base network
         for k in range(33):
             x = self.vgg[k](x)
-        sources.append(self.L2Norm(x))
+        sources.append(self.L2Norm1(x))
         for k in range(33, len(self.vgg)):
             x = self.vgg[k](x)
-        sources.append(x)
+        sources.append(self.L2Norm2(x))
 
         # Add extra layers
         for k, v in enumerate(self.extras):
             x = v(x)
-            if k in [4, 11]:
-                sources.append(F.relu(x, inplace=True))
+            if k == 6:
+                sources.append(self.L2Norm3(x))
+            if k == 13:
+                sources.append(self.L2Norm4(x))
 
         # Apply multibox head to source layers
         for (x, l, c, r) in zip(sources, self.loc, self.conf, self.regr):
@@ -130,7 +135,9 @@ def extra_layers(conv, acti):
             conv(256, 64, kernel_size=1),
             nn.BatchNorm2d(64),
             acti(64),
-            conv(64, 128, kernel_size=3, stride=1, padding=1)]
+            conv(64, 128, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(128),
+            acti(128)]
 
 
 def multibox(base, extras, num_classes, conv):
