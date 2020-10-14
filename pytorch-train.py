@@ -68,7 +68,7 @@ def execute(model_name, qtype, dataset, output, training_pref, ssd_settings,
             trained_model_path=None):
 
     ssd_settings['n_classes'] += 1
-    quantized = (qtype == 'binary') or (qtype == 'ternary')
+    quantized = (qtype == 'ternary')
     plot = Plotting(save_dir=output['plots'])
 
     # Initialize dataset
@@ -199,8 +199,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser('Train Single Shot Jet Detection Model')
     parser.add_argument('name', type=str, help='Model name')
-    parser.add_argument('qtype', type=str,
-                        choices={'full', 'ternary', 'binary'},
+    parser.add_argument('qtype', type=str, choices={'full', 'ternary'},
                         help='Type of quantization')
     parser.add_argument('config', type=str, help="Path to config file")
     parser.add_argument('-m', '--pre-trained', type=str,

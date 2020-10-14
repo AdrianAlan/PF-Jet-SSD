@@ -163,15 +163,11 @@ def multibox(base, extras, num_classes, conv):
 
 def build_ssd(phase, ssd_settings, qtype='full'):
 
-    if qtype == 'binary':
-        conv = BinaryConv2d
-        acti = nn.ReLU(inplace=True)
-    elif qtype == 'ternary':
+    acti = nn.PReLU
+    if qtype == 'ternary':
         conv = TernaryConv2d
-        acti = nn.PReLU
     else:
         conv = nn.Conv2d
-        acti = nn.PReLU
 
     input_dimensions = ssd_settings['input_dimensions']
 

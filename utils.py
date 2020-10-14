@@ -247,7 +247,6 @@ class GetResources():
         register_hooks = {
             nn.Conv2d: self.count_conv_full_precision,
             TernaryConv2d: self.count_conv_ternary,
-            BinaryConv2d: self.count_conv_ternary,
             nn.BatchNorm2d: self.count_bn,
             nn.PReLU: self.count_relu,
             nn.MaxPool2d: self.zero_ops,
