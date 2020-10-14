@@ -1,8 +1,6 @@
-import math
 import torch
 import torch.nn as nn
-
-from torch.autograd import Function
+import torch.nn.functional as F
 
 
 class TernaryConv2d(nn.Conv2d):
@@ -17,8 +15,8 @@ class TernaryConv2d(nn.Conv2d):
 
         self.weight.data = Ternary(self.weight.org)
 
-        out = nn.functional.conv2d(input, self.weight, None, self.stride,
-                                   self.padding, self.dilation, self.groups)
+        out = F.conv2d(input, self.weight, None, self.stride,
+                       self.padding, self.dilation, self.groups)
 
         if self.bias is not None:
             self.bias.org = self.bias.data.clone()
