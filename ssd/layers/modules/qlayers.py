@@ -25,9 +25,17 @@ class TernaryConv2d(nn.Conv2d):
         return out
 
 
-def Ternary(tensor, delta=None):
+def Ternary(tensor, delta=None, alpha=None):
     if delta is None:
         delta = .7*(torch.abs(tensor).mean())
-    return torch.where(torch.abs(tensor) < delta,
-                       torch.zeros_like(tensor),
-                       tensor.sign())
+
+    x = torch.where(torch.abs(tensor) < delta,
+                    torch.zeros_like(tensor),
+                    tensor.sign())
+
+    if alpha is None:
+        count = torch.abs(x).sum()
+        abssum = torch.sum(x*tensor)
+        alpha = abssum / count
+
+    return x*alpha.type(torch.FloatTensor)
