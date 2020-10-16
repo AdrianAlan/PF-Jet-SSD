@@ -26,8 +26,11 @@ class TernaryConv2d(nn.Conv2d):
 
 
 def Ternary(tensor, delta=None, alpha=None):
+    n = tensor[0].nelement()
+
     if delta is None:
-        delta = .7*(torch.abs(tensor).mean())
+        delta = .7 * tensor.norm(1, 3).sum(2).sum(1).div(n)
+        delta = torch.repeat_interleave(delta, n).view(tensor.size())
 
     x = torch.where(torch.abs(tensor) < delta,
                     torch.zeros_like(tensor),
