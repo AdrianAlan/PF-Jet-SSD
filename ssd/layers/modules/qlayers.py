@@ -37,8 +37,9 @@ def Ternary(tensor, delta=None, alpha=None):
                     tensor.sign())
 
     if alpha is None:
-        count = torch.abs(x).sum()
-        abssum = torch.sum(x*tensor)
+        count = torch.abs(x).sum(1).sum(1).sum(1)
+        abssum = (x*tensor).sum(1).sum(1).sum(1)
         alpha = abssum / count
+        alpha = torch.repeat_interleave(alpha, n).view(tensor.size())
 
-    return x*alpha.type(torch.FloatTensor)
+    return x*alpha
