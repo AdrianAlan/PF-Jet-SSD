@@ -18,10 +18,6 @@ class TernaryConv2d(nn.Conv2d):
         out = F.conv2d(input, self.weight, None, self.stride,
                        self.padding, self.dilation, self.groups)
 
-        if self.bias is not None:
-            self.bias.org = self.bias.data.clone()
-            out += self.bias.view(1, -1, 1, 1).expand_as(out)
-
         return out
 
 
