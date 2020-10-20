@@ -96,7 +96,6 @@ def execute(model_name, qtype, dataset, output, training_pref, ssd_settings,
         ssd_net.load_weights(trained_model_path)
     else:
         ssd_net.vgg.apply(weights_init)
-        ssd_net.extras.apply(weights_init)
         ssd_net.loc.apply(weights_init)
         ssd_net.conf.apply(weights_init)
 

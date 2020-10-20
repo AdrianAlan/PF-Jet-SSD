@@ -10,12 +10,11 @@ from torch.autograd import Variable
 
 class SSD(nn.Module):
 
-    def __init__(self, phase, base, extras, head, ssd_settings):
+    def __init__(self, phase, base, head, ssd_settings):
         super(SSD, self).__init__()
 
         self.phase = phase
         self.vgg = nn.ModuleList(base)
-        self.extras = nn.ModuleList(extras)
         self.loc = nn.ModuleList(head[0])
         self.priorbox = PriorBox()
         self.conf = nn.ModuleList(head[1])
@@ -31,8 +30,6 @@ class SSD(nn.Module):
         self.priors = Variable(self.priorbox.apply(config))
         self.L2Norm1 = L2Norm(256, 20)
         self.L2Norm2 = L2Norm(512, 20)
-        self.L2Norm3 = L2Norm(256, 20)
-        self.L2Norm4 = L2Norm(128, 20)
 
         if phase == 'test':
             self.softmax = nn.Softmax(dim=-1)
@@ -50,14 +47,6 @@ class SSD(nn.Module):
         for k in range(33, len(self.vgg)):
             x = self.vgg[k](x)
         sources.append(self.L2Norm2(x))
-
-        # Add extra layers
-        for k, v in enumerate(self.extras):
-            x = v(x)
-            if k == 6:
-                sources.append(self.L2Norm3(x))
-            if k == 13:
-                sources.append(self.L2Norm4(x))
 
         # Apply multibox head to source layers
         for (x, l, c, r) in zip(sources, self.loc, self.conf, self.regr):
@@ -123,40 +112,16 @@ def vgg(in_channels, conv, acti):
     return layers
 
 
-def extra_layers(conv, acti):
-    return [conv(512, 128, kernel_size=1, padding=1),
-            nn.BatchNorm2d(128),
-            acti(128),
-            nn.AvgPool2d(kernel_size=2, stride=2, padding=1),
-            conv(128, 256, kernel_size=1, padding=1),
-            nn.BatchNorm2d(256),
-            acti(256),
-            nn.AvgPool2d(kernel_size=2, stride=2, padding=1),
-            conv(256, 64, kernel_size=1),
-            nn.BatchNorm2d(64),
-            acti(64),
-            conv(64, 128, kernel_size=3, stride=1, padding=1),
-            nn.BatchNorm2d(128),
-            acti(128)]
-
-
-def multibox(base, extras, num_classes, conv):
+def multibox(base, num_classes, conv):
     loc, conf, regr = [], [], []
 
     base_sources = [27, 47]
-    extra_sources = [4, 11]
 
     for k, v in enumerate(base_sources):
         loc += [conv(base[v].out_channels, 2, kernel_size=3, padding=1)]
         conf += [conv(base[v].out_channels, num_classes,
                  kernel_size=3, padding=1)]
         regr += [conv(base[v].out_channels, 1, kernel_size=3, padding=1)]
-
-    for k, v in enumerate(extra_sources):
-        loc += [conv(extras[v].out_channels, 2, kernel_size=3, padding=1)]
-        conf += [conv(extras[v].out_channels, num_classes,
-                 kernel_size=3, padding=1)]
-        regr += [conv(extras[v].out_channels, 1, kernel_size=3, padding=1)]
 
     return (loc, conf, regr)
 
@@ -172,7 +137,6 @@ def build_ssd(phase, ssd_settings, qtype='full'):
     input_dimensions = ssd_settings['input_dimensions']
 
     base = vgg(input_dimensions[0], conv, acti)
-    extras = extra_layers(conv, acti)
-    head = multibox(base, extras, ssd_settings['n_classes'], nn.Conv2d)
+    head = multibox(base, ssd_settings['n_classes'], nn.Conv2d)
 
-    return SSD(phase, base, extras, head, ssd_settings)
+    return SSD(phase, base, head, ssd_settings)
