@@ -16,8 +16,8 @@ class Plotting():
 
         self.save_dir = save_dir
         self.line_styles = [(0, ()), (0, (2, 2))]
-        self.legend = ['Full Precision Network', 'Ternary Precision Network']
-        self.loc_legend = [r'$\mu_{1/2}$', r'$\mu$']
+        self.legend = ['Full Precision Network', 'Ternary Weight Network']
+        self.loc_legend = ['Q2', r'$\mu$']
         self.ref_recall = ref_recall
 
         plt.style.use('./plots/ssdjet.mplstyle')
