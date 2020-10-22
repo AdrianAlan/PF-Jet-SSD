@@ -29,7 +29,7 @@ class SSD(nn.Module):
                   'size': ssd_settings['object_size']}
         self.priors = Variable(self.priorbox.apply(config))
         self.L2Norm1 = L2Norm(256, 20)
-        self.L2Norm2 = L2Norm(512, 20)
+        self.L2Norm2 = L2Norm(256, 20)
 
         if phase == 'test':
             self.softmax = nn.Softmax(dim=-1)
@@ -103,12 +103,12 @@ def vgg(in_channels, conv, acti):
             in_channels = v
 
     layers += [nn.AvgPool2d(kernel_size=3, stride=1, padding=1),
-               conv(in_channels, 512, kernel_size=3),
-               nn.BatchNorm2d(512),
-               acti(512),
-               conv(512, 512, kernel_size=1),
-               nn.BatchNorm2d(512),
-               acti(512)]
+               conv(in_channels, 256, kernel_size=3),
+               nn.BatchNorm2d(256),
+               acti(256),
+               conv(256, 256, kernel_size=1),
+               nn.BatchNorm2d(256),
+               acti(256)]
     return layers
 
 
