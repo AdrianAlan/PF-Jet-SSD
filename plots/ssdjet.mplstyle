@@ -2,7 +2,7 @@ figure.dpi: 150
 figure.figsize: 5.6, 4.2
 
 savefig.dpi: 200
-savefig.format: pdf
+savefig.format: png
 savefig.bbox: tight
 
 image.cmap: viridis
