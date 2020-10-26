@@ -95,7 +95,8 @@ class Plotting():
 
         # Helper line c.d.
         plt.xticks(list(plt.xticks()[0]) + [self.ref_recall])
-        plt.yticks([0, 1] + ref_precisions)
+        plt.ylim(0.5, 1)
+        plt.yticks(list(set([0.5, 0.7, 0.9, 1] + ref_precisions)))
         ax.plot([0.3, 0.3], [0, np.max(ref_precisions)],
                 linestyle=self.line_styles[1],
                 alpha=0.5,
