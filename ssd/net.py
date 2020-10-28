@@ -92,9 +92,9 @@ def vgg(in_channels, conv, acti):
                acti(32)]
     in_channels = 32
 
-    for v in [32, 'M', 64, 64, 'M', 128, 128, 128, 'M', 256, 256, 256,
-              'M', 256, 256, 256]:
-        if v == 'M':
+    for v in [32, 'P', 64, 64, 'P', 128, 128, 128, 'P', 256, 256, 256,
+              'P', 256, 256, 256]:
+        if v == 'P':
             layers += [nn.AvgPool2d(kernel_size=2, stride=2, padding=1)]
         else:
             layers += [conv(in_channels, v, kernel_size=3, padding=1),
