@@ -38,7 +38,8 @@ def get_data_loader(source_path, batch_size, num_workers, input_dimensions,
 
 
 def test_net(model, dataset, im_size, conf_threshold=0., batch_size=50,
-             overlap_threshold=.1, num_classes=3, epsilon=10**-6, top_k=200):
+             overlap_threshold=.1, num_classes=3, epsilon=10**-6, top_k=200,
+             verbose=False):
 
     results = [torch.empty(0, 2) for _ in range(num_classes)]
     deltas = torch.empty((0, 5))
@@ -46,7 +47,8 @@ def test_net(model, dataset, im_size, conf_threshold=0., batch_size=50,
 
     with torch.no_grad():
 
-        progress_bar = tqdm(total=len(dataset), desc='Evaluating events')
+        if args.verbose:
+            progress_bar = tqdm(total=len(dataset), desc='Evaluating events')
 
         for X, y in dataset:
 
@@ -139,9 +141,11 @@ def test_net(model, dataset, im_size, conf_threshold=0., batch_size=50,
                     cls_dets = all_dets[all_dets[:, 4] == c]
                     results[c] = torch.cat((results[c], cls_dets[:, [6, 5]]))
 
-            progress_bar.update(1)
+            if args.verbose:
+                progress_bar.update(1)
 
-        progress_bar.close()
+        if args.verbose:
+            progress_bar.close()
 
         it = inf_time.mean()*1000/batch_size
 
@@ -166,6 +170,8 @@ if __name__ == '__main__':
     parser.add_argument('twn_source_path', type=str,
                         help='Ternary Weight Network model source path')
     parser.add_argument('config', type=str, help="Path to config file")
+    parser.add_argument('-v', '--verbose', action="store_true",
+                        help='Output verbosity')
     args = parser.parse_args()
     config = yaml.safe_load(open(args.config))
 
@@ -195,27 +201,31 @@ if __name__ == '__main__':
 
     for qtype, source_path in [('full', args.fpn_source_path),
                                ('ternary', args.twn_source_path)]:
-        print('Testing {0} precision network model'.format(qtype))
+        if args.verbose:
+            print('Testing {0} precision network model'.format(qtype))
         net = build_ssd('test', ssd_settings, qtype=qtype)
         net.load_weights(source_path)
         net.eval()
         net = net.cuda()
         cudnn.benchmark = True
 
-        mac = GetResources(net, 
-                           dummy_input=torch.unsqueeze(torch.randn(in_dim), 
+        mac = GetResources(net,
+                           dummy_input=torch.unsqueeze(torch.randn(in_dim),
                                                        0))
         ops = mac.profile() / 1e9
-        print('Total FLOPS {0:.3f}G, TERNARY {1:.3f}G'.format(ops[0], ops[1]))
+        if args.verbose:
+            print('Total FLOPS {0:.3f}G, TERNARY {1:.3f}G'.format(ops[0], ops[1]))
 
         it, res, delta = test_net(net, loader, batch_size=bs,
                                   conf_threshold=ct, im_size=in_dim[1:],
                                   num_classes=num_classes,
-                                  overlap_threshold=ot, top_k=top_k)
-        print('')
-        print('Average inference time: {0:.3f} ms'.format(it))
-        for _, _, c, ap in res:
-            print('Average precision for class {0}: {1:.3f}'.format(c, ap))
+                                  overlap_threshold=ot, top_k=top_k,
+                                  verbose=args.verbose)
+        if args.verbose:
+            print('')
+            print('Average inference time: {0:.3f} ms'.format(it))
+            for _, _, c, ap in res:
+                print('Average precision for class {0}: {1:.3f}'.format(c, ap))
 
         plotting_results.append(res)
         plotting_deltas.append(delta)

@@ -65,7 +65,7 @@ def batch_step(x, y, optimizer, net, criterion):
 
 
 def execute(model_name, qtype, dataset, output, training_pref, ssd_settings,
-            trained_model_path=None):
+            trained_model_path=None, verbose=False):
 
     ssd_settings['n_classes'] += 1
     quantized = (qtype == 'ternary')
@@ -86,7 +86,8 @@ def execute(model_name, qtype, dataset, output, training_pref, ssd_settings,
 
     # Build SSD network
     ssd_net = build_ssd('train', ssd_settings, qtype=qtype)
-    print(ssd_net)
+    if verbose:
+        print(ssd_net)
 
     with open('{}/{}.txt'.format(output['model'], model_name), 'w') as f:
         f.write(str(ssd_net))
@@ -106,15 +107,17 @@ def execute(model_name, qtype, dataset, output, training_pref, ssd_settings,
     net = net.cuda()
 
     # Print total number of parameters
-    total_params = sum(p.numel() for p in net.parameters() if p.requires_grad)
-    print('Total network parameters: %s' % total_params)
+    if verbose:
+        total_params = sum(p.numel() for p in net.parameters() if p.requires_grad)
+        print('Total network parameters: %s' % total_params)
 
     # Set training objective parameters
     optimizer = optim.SGD(net.parameters(), lr=1e-3,
                           momentum=training_pref['momentum'],
                           weight_decay=training_pref['weight_decay'])
     cp_es = EarlyStopping(patience=training_pref['patience'],
-                          save_path='%s/%s.pth' % (output['model'], model_name))
+                          save_path='%s/%s.pth' % (output['model'], model_name),
+                          verbose=verbose)
     criterion = MultiBoxLoss(ssd_settings['n_classes'],
                              min_overlap=ssd_settings['overlap_threshold'])
 
@@ -125,8 +128,9 @@ def execute(model_name, qtype, dataset, output, training_pref, ssd_settings,
         adjust_learning_rate(optimizer, epoch, training_pref['learning_rates'])
 
         # Start model training
-        tr = trange(len(train_loader), file=sys.stdout)
-        tr.set_description('Epoch {}'.format(epoch))
+        if verbose:
+            tr = trange(len(train_loader), file=sys.stdout)
+            tr.set_description('Epoch {}'.format(epoch))
         all_epoch_loss = torch.zeros(3)
         net.train()
 
@@ -151,19 +155,22 @@ def execute(model_name, qtype, dataset, output, training_pref, ssd_settings,
             all_epoch_loss += torch.tensor([l.item(), c.item(), r.item()])
             av_epoch_loss = all_epoch_loss / (batch_index + 1)
 
-            tr.set_description(
-                ('Epoch {} Loss {:.5f} Localization {:.5f} ' +
-                 'Classification {:.5f} Regresion {:.5f}').format(
-                 epoch, av_epoch_loss.sum(), av_epoch_loss[0],
-                 av_epoch_loss[1], av_epoch_loss[2]))
-            tr.update(1)
+            if verbose:
+                tr.set_description(
+                    ('Epoch {} Loss {:.5f} Localization {:.5f} ' +
+                     'Classification {:.5f} Regresion {:.5f}').format(
+                     epoch, av_epoch_loss.sum(), av_epoch_loss[0],
+                     av_epoch_loss[1], av_epoch_loss[2]))
+                tr.update(1)
 
         train_loss = torch.cat((train_loss, av_epoch_loss.unsqueeze(1)), 1)
-        tr.close()
+        if verbose:
+            tr.close()
 
         # Start model validation
-        tr = trange(len(val_loader), file=sys.stdout)
-        tr.set_description('Validation')
+        if verbose:
+            tr = trange(len(val_loader), file=sys.stdout)
+            tr.set_description('Validation')
         all_epoch_loss = torch.zeros(3)
         net.eval()
 
@@ -174,15 +181,17 @@ def execute(model_name, qtype, dataset, output, training_pref, ssd_settings,
                 all_epoch_loss += torch.tensor([l.item(), c.item(), r.item()])
                 av_epoch_loss = all_epoch_loss / (batch_index + 1)
 
-                tr.set_description(
-                    ('Validation Loss {:.5f} Localization {:.5f} ' +
-                     'Classification {:.5f} Regresion {:.5f}').format(
-                     av_epoch_loss.sum(), av_epoch_loss[0], av_epoch_loss[1],
-                     av_epoch_loss[2]))
-                tr.update(1)
+                if verbose:
+                    tr.set_description(
+                        ('Validation Loss {:.5f} Localization {:.5f} ' +
+                         'Classification {:.5f} Regresion {:.5f}').format(
+                         av_epoch_loss.sum(), av_epoch_loss[0], av_epoch_loss[1],
+                         av_epoch_loss[2]))
+                    tr.update(1)
 
             val_loss = torch.cat((val_loss, av_epoch_loss.unsqueeze(1)), 1)
-            tr.close()
+            if verbose:
+                tr.close()
 
             plot.draw_loss(train_loss.cpu().numpy(),
                            val_loss.cpu().numpy(),
@@ -205,6 +214,8 @@ if __name__ == '__main__':
     parser.add_argument('-m', '--pre-trained', type=str,
                         default=None, help='Path to pre-trained model',
                         dest='trained_model_path')
+    parser.add_argument('-v', '--verbose', action="store_true",
+                        help='Output verbosity')
     args = parser.parse_args()
     config = yaml.safe_load(open(args.config))
 
@@ -219,4 +230,5 @@ if __name__ == '__main__':
             config['output'],
             config['training_pref'],
             config['ssd_settings'],
-            trained_model_path=args.trained_model_path)
+            trained_model_path=args.trained_model_path,
+            verbose=args.verbose)

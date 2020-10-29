@@ -58,7 +58,8 @@ class HDF5Generator:
     def __init__(self,
                  hdf5_dataset_path,
                  hdf5_dataset_size,
-                 files_details):
+                 files_details,
+                 verbose):
 
         self.constants = PhysicsConstants(list(files_details[0])[0])
 
@@ -74,6 +75,7 @@ class HDF5Generator:
         self.hdf5_dataset_path = hdf5_dataset_path
         self.hdf5_dataset_size = hdf5_dataset_size
         self.files_details = files_details
+        self.verbose = verbose
 
     def create_hdf5_dataset(self, progress_bar):
 
@@ -224,7 +226,8 @@ class HDF5Generator:
 
                 i = i + 1
 
-                progress_bar.update(1)
+                if self.verbose:
+                    progress_bar.update(1)
 
         hdf5_dataset.close()
 
@@ -381,6 +384,8 @@ if __name__ == '__main__':
     parser.add_argument('-c', '--config', type=str, action=IsReadableDir,
                         default='./data/file-configuration.json',
                         help='Configuration file path', dest='config')
+    parser.add_argument('-v', '--verbose', action="store_true",
+                        help='Output verbosity')
     args = parser.parse_args()
 
     utils = Utils()
@@ -388,7 +393,8 @@ if __name__ == '__main__':
     files_details, batch_size, total_events = utils.parse_config(
         args.src_folder, args.nfiles, args.config)
 
-    pb = tqdm(total=total_events, desc=('Processing %s' % args.src_folder))
+    if self.verbose:
+        pb = tqdm(total=total_events, desc=('Processing %s' % args.src_folder))
 
     for index, file_dict in enumerate(files_details):
 
@@ -397,7 +403,9 @@ if __name__ == '__main__':
                 hdf5_dataset_path='{0}/{1}_{2}.h5'.format(
                         args.save_dir, args.src_folder, index),
                 hdf5_dataset_size=dataset_size,
-                files_details=file_dict)
+                files_details=file_dict,
+                verbose=args.verbose)
         generator.create_hdf5_dataset(pb)
 
-    pb.close()
+    if self.verbose:
+        pb.close()
