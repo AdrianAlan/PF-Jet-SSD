@@ -23,7 +23,7 @@ class Plotting():
         plt.style.use('./plots/ssdjet.mplstyle')
         matplotlib.rcParams["figure.figsize"] = (8.0, 6.0)
 
-        with open('./data/palette.json') as json_file:
+        with open('./pltos/palette.json') as json_file:
             self.color_palette = json.load(json_file)
         self.colors = [self.color_palette['indigo'],
                        self.color_palette['red'],
