@@ -136,14 +136,14 @@ class Plotting():
 
         for x, (c, w) in enumerate(zip(names, width)):
 
-            for idx, lbl, n in [(2, r'$\sigma(\eta_{SSD}-\eta_{GT})$', 'eta'),
-                                (3, r'$\sigma(\phi_{SSD}-\phi_{GT})$', 'phi'),
-                                (4, r'$\frac{|m_{SSD}-m_{GT}|}{m_{GT}}$', 'mass')]:
+            for idx, l, n in [(2, r'$\sigma(\eta_{SSD}-\eta_{GT})$', 'eta'),
+                              (3, r'$\sigma(\phi_{SSD}-\phi_{GT})$', 'phi'),
+                              (4, r'$\frac{|m_{SSD}-m_{GT}|}{m_{GT}}$', 'm')]:
 
                 fig, ax = plt.subplots()
                 cst_lgd = []
                 plt.xlabel('$p_T$ [GeV]', horizontalalignment='right', x=1.0)
-                plt.ylabel(lbl, horizontalalignment='right', y=1.0)
+                plt.ylabel(l, horizontalalignment='right', y=1.0)
 
                 for q, d in enumerate(data):
                     shade = 'shade_800' if q else 'shade_200'

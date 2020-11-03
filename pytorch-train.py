@@ -64,7 +64,7 @@ def batch_step(x, y, optimizer, net, criterion):
     return criterion(output, y)
 
 
-def execute(model_name, qtype, dataset, output, training_pref, ssd_settings,
+def execute(name, qtype, dataset, output, training_pref, ssd_settings,
             trained_model_path=None, verbose=False):
 
     ssd_settings['n_classes'] += 1
@@ -89,7 +89,7 @@ def execute(model_name, qtype, dataset, output, training_pref, ssd_settings,
     if verbose:
         print(ssd_net)
 
-    with open('{}/{}.txt'.format(output['model'], model_name), 'w') as f:
+    with open('{}/{}.txt'.format(output['model'], name), 'w') as f:
         f.write(str(ssd_net))
 
     # Initialize weights
@@ -108,15 +108,15 @@ def execute(model_name, qtype, dataset, output, training_pref, ssd_settings,
 
     # Print total number of parameters
     if verbose:
-        total_params = sum(p.numel() for p in net.parameters() if p.requires_grad)
-        print('Total network parameters: %s' % total_params)
+        params = sum(p.numel() for p in net.parameters() if p.requires_grad)
+        print('Total network parameters: %s' % params)
 
     # Set training objective parameters
     optimizer = optim.SGD(net.parameters(), lr=1e-3,
                           momentum=training_pref['momentum'],
                           weight_decay=training_pref['weight_decay'])
     cp_es = EarlyStopping(patience=training_pref['patience'],
-                          save_path='%s/%s.pth' % (output['model'], model_name),
+                          save_path='%s/%s.pth' % (output['model'], name),
                           verbose=verbose)
     criterion = MultiBoxLoss(ssd_settings['n_classes'],
                              min_overlap=ssd_settings['overlap_threshold'])
@@ -185,8 +185,8 @@ def execute(model_name, qtype, dataset, output, training_pref, ssd_settings,
                     tr.set_description(
                         ('Validation Loss {:.5f} Localization {:.5f} ' +
                          'Classification {:.5f} Regresion {:.5f}').format(
-                         av_epoch_loss.sum(), av_epoch_loss[0], av_epoch_loss[1],
-                         av_epoch_loss[2]))
+                         av_epoch_loss.sum(), av_epoch_loss[0],
+                         av_epoch_loss[1], av_epoch_loss[2]))
                     tr.update(1)
 
             val_loss = torch.cat((val_loss, av_epoch_loss.unsqueeze(1)), 1)
