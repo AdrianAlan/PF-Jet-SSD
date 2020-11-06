@@ -87,13 +87,8 @@ class SSD(nn.Module):
 
 def vgg(in_channels):
     layers = []
-    layers += [nn.Conv2d(in_channels, 32, kernel_size=3, padding=1),
-               nn.BatchNorm2d(32),
-               nn.PReLU(32)]
-    in_channels = 32
-
-    for v in [32, 'P', 64, 64, 'P', 128, 128, 128, 'P', 256, 256, 256,
-              'P', 256, 256, 256]:
+    for v in [32, 32, 'P', 64, 64, 'P', 128, 128, 128, 'P', 256, 256, 256, 'P',
+              256, 256, 256]:
         if v == 'P':
             layers += [nn.AvgPool2d(kernel_size=2, stride=2, padding=1)]
         else:
@@ -101,7 +96,6 @@ def vgg(in_channels):
                        nn.BatchNorm2d(v),
                        nn.PReLU(v)]
             in_channels = v
-
     layers += [nn.AvgPool2d(kernel_size=3, stride=1, padding=1),
                nn.Conv2d(in_channels, 256, kernel_size=3),
                nn.BatchNorm2d(256),
