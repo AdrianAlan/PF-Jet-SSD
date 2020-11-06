@@ -85,7 +85,7 @@ class SSD(nn.Module):
         return False
 
 
-def vgg(in_channels, conv, acti):
+def vgg(in_channels, acti):
     layers = []
     layers += [nn.Conv2d(in_channels, 32, kernel_size=3, padding=1),
                nn.BatchNorm2d(32),
@@ -97,31 +97,33 @@ def vgg(in_channels, conv, acti):
         if v == 'P':
             layers += [nn.AvgPool2d(kernel_size=2, stride=2, padding=1)]
         else:
-            layers += [conv(in_channels, v, kernel_size=3, padding=1),
+            layers += [nn.Conv2d(in_channels, v, kernel_size=3, padding=1),
                        nn.BatchNorm2d(v),
                        acti(v)]
             in_channels = v
 
     layers += [nn.AvgPool2d(kernel_size=3, stride=1, padding=1),
-               conv(in_channels, 256, kernel_size=3),
+               nn.Conv2d(in_channels, 256, kernel_size=3),
                nn.BatchNorm2d(256),
                acti(256),
-               conv(256, 256, kernel_size=1),
+               nn.Conv2d(256, 256, kernel_size=1),
                nn.BatchNorm2d(256),
                acti(256)]
     return layers
 
 
-def multibox(base, num_classes, conv):
+def multibox(base, num_classes):
     loc, conf, regr = [], [], []
 
     base_sources = [27, 47]
 
     for k, v in enumerate(base_sources):
-        loc += [conv(base[v].out_channels, 2, kernel_size=3, padding=1)]
-        conf += [conv(base[v].out_channels, num_classes,
-                 kernel_size=3, padding=1)]
-        regr += [conv(base[v].out_channels, 1, kernel_size=3, padding=1)]
+        loc += [nn.Conv2d(base[v].out_channels, 2,
+                          kernel_size=3, padding=1)]
+        conf += [nn.Conv2d(base[v].out_channels, num_classes,
+                           kernel_size=3, padding=1)]
+        regr += [nn.Conv2d(base[v].out_channels, 1,
+                           kernel_size=3, padding=1)]
 
     return (loc, conf, regr)
 
@@ -129,14 +131,10 @@ def multibox(base, num_classes, conv):
 def build_ssd(phase, ssd_settings, qtype='full'):
 
     acti = nn.PReLU
-    if qtype == 'ternary':
-        conv = TernaryConv2d
-    else:
-        conv = nn.Conv2d
 
     input_dimensions = ssd_settings['input_dimensions']
 
-    base = vgg(input_dimensions[0], conv, acti)
-    head = multibox(base, ssd_settings['n_classes'], nn.Conv2d)
+    base = vgg(input_dimensions[0], acti)
+    head = multibox(base, ssd_settings['n_classes'])
 
     return SSD(phase, base, head, ssd_settings)

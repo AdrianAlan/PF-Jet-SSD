@@ -18,6 +18,7 @@ from torch.autograd import Variable
 
 from ssd.checkpoints import EarlyStopping
 from ssd.layers.modules import MultiBoxLoss
+from ssd.layers.modules.qlayers import Ternary
 from ssd.generator import CalorimeterJetDataset
 from ssd.net import build_ssd
 from utils import Plotting
@@ -85,7 +86,7 @@ def execute(name, qtype, dataset, output, training_pref, ssd_settings,
                                       shuffle=False)
 
     # Build SSD network
-    ssd_net = build_ssd('train', ssd_settings, qtype=qtype)
+    ssd_net = build_ssd('train', ssd_settings)
     if verbose:
         print(ssd_net)
 
@@ -135,6 +136,14 @@ def execute(name, qtype, dataset, output, training_pref, ssd_settings,
         net.train()
 
         for batch_index, (images, targets) in enumerate(train_loader):
+
+            # Ternarize weights
+            if quantized:
+                for m in net.modules():
+                    if isinstance(m, nn.Conv2d):
+                        if m.in_channels > 2 and m.out_channels > 4:
+                            m.weight.org = m.weight.data.clone()
+                            m.weight.data = Ternary(m.weight.data)
 
             l, c, r = batch_step(images, targets, optimizer, net, criterion)
             loss = l + c + r

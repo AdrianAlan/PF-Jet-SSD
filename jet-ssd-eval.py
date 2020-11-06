@@ -203,7 +203,7 @@ if __name__ == '__main__':
                                ('ternary', args.twn_source_path)]:
         if args.verbose:
             print('Testing {0} precision network model'.format(qtype))
-        net = build_ssd('test', ssd_settings, qtype=qtype)
+        net = build_ssd('test', ssd_settings)
         net.load_weights(source_path)
         net.eval()
         net = net.cuda()
