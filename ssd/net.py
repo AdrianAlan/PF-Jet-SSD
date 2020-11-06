@@ -85,11 +85,11 @@ class SSD(nn.Module):
         return False
 
 
-def vgg(in_channels, acti):
+def vgg(in_channels):
     layers = []
     layers += [nn.Conv2d(in_channels, 32, kernel_size=3, padding=1),
                nn.BatchNorm2d(32),
-               acti(32)]
+               nn.PReLU(32)]
     in_channels = 32
 
     for v in [32, 'P', 64, 64, 'P', 128, 128, 128, 'P', 256, 256, 256,
@@ -99,16 +99,16 @@ def vgg(in_channels, acti):
         else:
             layers += [nn.Conv2d(in_channels, v, kernel_size=3, padding=1),
                        nn.BatchNorm2d(v),
-                       acti(v)]
+                       nn.PReLU(v)]
             in_channels = v
 
     layers += [nn.AvgPool2d(kernel_size=3, stride=1, padding=1),
                nn.Conv2d(in_channels, 256, kernel_size=3),
                nn.BatchNorm2d(256),
-               acti(256),
+               nn.PReLU(256),
                nn.Conv2d(256, 256, kernel_size=1),
                nn.BatchNorm2d(256),
-               acti(256)]
+               nn.PReLU(256)]
     return layers
 
 
@@ -130,11 +130,9 @@ def multibox(base, num_classes):
 
 def build_ssd(phase, ssd_settings, qtype='full'):
 
-    acti = nn.PReLU
-
     input_dimensions = ssd_settings['input_dimensions']
 
-    base = vgg(input_dimensions[0], acti)
+    base = vgg(input_dimensions[0])
     head = multibox(base, ssd_settings['n_classes'])
 
     return SSD(phase, base, head, ssd_settings)
