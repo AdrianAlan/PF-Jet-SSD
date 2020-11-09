@@ -184,6 +184,15 @@ def execute(name, qtype, dataset, output, training_pref, ssd_settings,
         net.eval()
 
         with torch.no_grad():
+
+            # Ternarize weights
+            if quantized:
+                for m in net.modules():
+                    if isinstance(m, nn.Conv2d):
+                        if m.in_channels > 2 and m.out_channels > 4:
+                            m.weight.org = m.weight.data.clone()
+                            m.weight.data = to_ternary(m.weight.data)
+
             for batch_index, (images, targets) in enumerate(val_loader):
 
                 l, c, r = batch_step(images, targets, None, net, criterion)
