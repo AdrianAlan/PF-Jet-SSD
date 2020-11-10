@@ -20,7 +20,7 @@ from ssd.checkpoints import EarlyStopping
 from ssd.layers.modules import MultiBoxLoss
 from ssd.generator import CalorimeterJetDataset
 from ssd.net import build_ssd
-from ssd.qutils import to_ternary
+from ssd.qutils import get_delta, get_alpha, to_ternary
 from utils import Plotting
 
 
@@ -135,6 +135,15 @@ def execute(name, qtype, dataset, output, training_pref, ssd_settings,
         all_epoch_loss = torch.zeros(3)
         net.train()
 
+        # Ternarize weights
+        if quantized:
+            for m in net.modules():
+                if isinstance(m, nn.Conv2d):
+                    if m.in_channels > 2 and m.out_channels > 4:
+                        delta = get_delta(m.weight.data)
+                        m.weight.delta = delta
+                        m.weight.alpha = get_alpha(m.weight.data, delta)
+
         for batch_index, (images, targets) in enumerate(train_loader):
 
             # Ternarize weights
@@ -143,23 +152,27 @@ def execute(name, qtype, dataset, output, training_pref, ssd_settings,
                     if isinstance(m, nn.Conv2d):
                         if m.in_channels > 2 and m.out_channels > 4:
                             m.weight.org = m.weight.data.clone()
-                            m.weight.data = to_ternary(m.weight.data)
+                            m.weight.data = to_ternary(m.weight.data,
+                                                       m.weight.delta,
+                                                       m.weight.alpha)
 
             l, c, r = batch_step(images, targets, optimizer, net, criterion)
             loss = l + c + r
             loss.backward()
 
             if quantized:
-                for p in list(net.parameters()):
-                    if hasattr(p, 'org'):
-                        p.data.copy_(p.org)
+                for m in net.modules():
+                    if isinstance(m, nn.Conv2d):
+                        if m.in_channels > 2 and m.out_channels > 4:
+                            m.weight.data.copy_(m.weight.org)
 
             optimizer.step()
 
             if quantized:
-                for p in list(net.parameters()):
-                    if hasattr(p, 'org'):
-                        p.org.copy_(p.data.clamp_(-1, 1))
+                for m in net.modules():
+                    if isinstance(m, nn.Conv2d):
+                        if m.in_channels > 2 and m.out_channels > 4:
+                            m.weight.org.copy_(m.weight.data.clamp_(-1, 1))
 
             all_epoch_loss += torch.tensor([l.item(), c.item(), r.item()])
             av_epoch_loss = all_epoch_loss / (batch_index + 1)
