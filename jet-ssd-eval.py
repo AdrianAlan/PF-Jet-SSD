@@ -199,20 +199,14 @@ if __name__ == '__main__':
     loader, h5 = get_data_loader(config['dataset']['test'],
                                  bs, workers, in_dim, jet_size)
 
-    for qtype, source_path in [('full', args.fpn_source_path),
-                               ('ternary', args.twn_source_path)]:
+    for source_path in [args.fpn_source_path, args.twn_source_path]:
         if args.verbose:
-            print('Testing {0} precision network model'.format(qtype))
+            print('Testing {0} model'.format(source_path))
         net = build_ssd('test', ssd_settings)
         net.load_weights(source_path)
         net.eval()
         net = net.cuda()
         cudnn.benchmark = True
-
-        dummy_input = torch.unsqueeze(torch.randn(in_dim), 0)
-        mac = GetResources(net, dummy_input=dummy_input).profile() / 1e9
-        if args.verbose:
-            print('Total FLOPS {0:.3f}G, TOPS {1:.3f}G'.format(mac[0], mac[1]))
 
         it, res, delta = test_net(net, loader, batch_size=bs,
                                   conf_threshold=ct, im_size=in_dim[1:],
@@ -227,6 +221,11 @@ if __name__ == '__main__':
 
         plotting_results.append(res)
         plotting_deltas.append(delta)
+
+    dummy_input = torch.unsqueeze(torch.randn(in_dim), 0)
+    mac = GetResources(net, dummy_input=dummy_input).profile() / 1e9
+    if args.verbose:
+        print('Total OPS: {0:.3f}G'.format(mac))
 
     plot = Plotting(save_dir=config['output']['plots'])
     plot.draw_precision_recall(plotting_results, jet_names)

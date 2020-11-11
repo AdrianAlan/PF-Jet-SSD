@@ -209,7 +209,7 @@ class GetResources():
         self.dummy_input = dummy_input
 
     def zero_ops(self, m, x, y):
-        m.total_ops += torch.DoubleTensor([int(0), int(0)]).cuda()
+        m.total_ops += torch.DoubleTensor([int(0)]).cuda()
 
     def count_conv(self, m, x, y):
         x = x[0]
@@ -221,33 +221,26 @@ class GetResources():
             # Cout x 1
             kernel_ops += + m.bias.nelement()
         # x N x H x W x Cout x (Cin x Kw x Kh + bias)
-        return torch.DoubleTensor([int(output * kernel_ops)]).cuda()
-
-    def count_conv_full_precision(self, m, x, y):
-        m.total_ops[0] += self.count_conv(m, x, y)[0]
-
-    def count_conv_ternary(self, m, x, y):
-        m.total_ops[1] += self.count_conv(m, x, y)[0]
+        m.total_ops += torch.DoubleTensor([int(output * kernel_ops)]).cuda()
 
     def count_bn(self, m, x, y):
         x = x[0]
         nelements = x.numel()
         if not m.training:
             nelements = 2 * nelements
-        m.total_ops += torch.DoubleTensor([int(nelements), int(0)]).cuda()
+        m.total_ops += torch.DoubleTensor([int(nelements)]).cuda()
 
     def count_relu(self, m, x, y):
         x = x[0]
         nelements = x.numel()
-        m.total_ops += torch.DoubleTensor([int(nelements), int(0)]).cuda()
+        m.total_ops += torch.DoubleTensor([int(nelements)]).cuda()
 
     def profile(self):
         handler_collection = {}
         types_collection = set()
 
         register_hooks = {
-            nn.Conv2d: self.count_conv_full_precision,
-            TernaryConv2d: self.count_conv_ternary,
+            nn.Conv2d: self.count_conv,
             nn.BatchNorm2d: self.count_bn,
             nn.PReLU: self.count_relu,
             nn.MaxPool2d: self.zero_ops,
@@ -255,7 +248,7 @@ class GetResources():
         }
 
         def add_hooks(m: nn.Module):
-            m.register_buffer('total_ops', torch.zeros(2, dtype=torch.float64))
+            m.register_buffer('total_ops', torch.zeros(1, dtype=torch.float64))
             m_type = type(m)
 
             fn = None
@@ -267,19 +260,18 @@ class GetResources():
             types_collection.add(m_type)
 
         def dfs_count(module: nn.Module, prefix="\t"):
-            total_flops = torch.zeros(2, dtype=torch.float64)
+            total_ops = 0
             for m in module.children():
                 if m in handler_collection and not isinstance(
                           m, (nn.Sequential, nn.ModuleList)):
-                    m_ops = m.total_ops
+                    ops = m.total_ops.item()
                 else:
-                    m_ops = dfs_count(m, prefix=prefix + "\t")
-                total_flops += m_ops
-            return total_flops
-
+                    ops = dfs_count(m, prefix=prefix + "\t")
+                total_ops += ops
+            return total_ops
         self.net.apply(add_hooks)
         with torch.no_grad():
-            self.net(*(self.dummy_input, ))
+            self.net(self.dummy_input)
         total_ops = dfs_count(self.net)
 
-        return total_ops.cpu().numpy()
+        return total_ops
