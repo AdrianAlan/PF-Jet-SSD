@@ -135,7 +135,7 @@ def multibox(base, num_classes, phase):
     return (loc, conf, regr)
 
 
-def build_ssd(phase, ssd_settings, qtype='full'):
+def build_ssd(phase, ssd_settings):
 
     input_dimensions = ssd_settings['input_dimensions']
 
