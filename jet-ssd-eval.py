@@ -216,7 +216,7 @@ if __name__ == '__main__':
         if args.verbose:
             print('\nAverage inference time: {0:.3f} ms'.format(it))
             for _, _, c, ap in res:
-                print('Average precision for class {0}: {1:.3f}'.format(c, ap))
+                print('AP for {0} jets: {1:.3f}'.format(jet_names[c], ap))
 
         plotting_results.append(res)
         plotting_deltas.append(delta)
