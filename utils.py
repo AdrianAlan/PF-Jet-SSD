@@ -230,7 +230,7 @@ class GetResources():
             nelements = 2 * nelements
         m.total_ops += torch.DoubleTensor([int(nelements)]).cuda()
 
-    def count_relu(self, m, x, y):
+    def count_prelu(self, m, x, y):
         x = x[0]
         nelements = x.numel()
         m.total_ops += torch.DoubleTensor([int(nelements)]).cuda()
@@ -242,7 +242,7 @@ class GetResources():
         register_hooks = {
             nn.Conv2d: self.count_conv,
             nn.BatchNorm2d: self.count_bn,
-            nn.PReLU: self.count_relu,
+            nn.PReLU: self.count_prelu,
             nn.MaxPool2d: self.zero_ops,
             nn.AvgPool2d: self.zero_ops
         }
