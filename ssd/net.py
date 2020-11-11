@@ -27,13 +27,16 @@ class SSD(nn.Module):
                   'feature_maps': ssd_settings['feature_maps'],
                   'steps': ssd_settings['steps'],
                   'size': ssd_settings['object_size']}
-        self.priors = Variable(self.priorbox.apply(config))
-        self.L2Norm1 = L2Norm(256, 20)
-        self.L2Norm2 = L2Norm(256, 20)
 
         if phase == 'test':
+            config['feature_maps'] = [config['feature_maps'][0]]
+            config['steps'] = [config['steps'][0]]
             self.softmax = nn.Softmax(dim=-1)
             self.detect = Detect()
+        else:
+            self.L2Norm2 = L2Norm(256, 20)
+        self.L2Norm1 = L2Norm(256, 20)
+        self.priors = Variable(self.priorbox.apply(config))
 
     def forward(self, x):
         """Applies network layers and ops on input images x"""
@@ -44,9 +47,10 @@ class SSD(nn.Module):
         for k in range(33):
             x = self.vgg[k](x)
         sources.append(self.L2Norm1(x))
-        for k in range(33, len(self.vgg)):
-            x = self.vgg[k](x)
-        sources.append(self.L2Norm2(x))
+        if self.phase != 'test':
+            for k in range(33, len(self.vgg)):
+                x = self.vgg[k](x)
+            sources.append(self.L2Norm2(x))
 
         # Apply multibox head to source layers
         for (x, l, c, r) in zip(sources, self.loc, self.conf, self.regr):
@@ -80,15 +84,20 @@ class SSD(nn.Module):
         other, ext = os.path.splitext(file_path)
         if ext == '.pkl' or '.pth':
             self.load_state_dict(torch.load(file_path,
-                                 map_location=lambda storage, loc: storage))
+                                 map_location=lambda storage, loc: storage),
+                                 strict=False)
             return True
         return False
 
 
-def vgg(in_channels):
+def vgg(in_channels, phase):
     layers = []
-    for v in [32, 32, 'P', 64, 64, 'P', 128, 128, 128, 'P', 256, 256, 256, 'P',
-              256, 256, 256]:
+    if phase == 'test':
+        cfg = [32, 32, 'P', 64, 64, 'P', 128, 128, 128, 'P', 256, 256, 256]
+    else:
+        cfg = [32, 32, 'P', 64, 64, 'P', 128, 128, 128, 'P', 256, 256, 256,
+               'P', 256, 256, 256]
+    for v in cfg:
         if v == 'P':
             layers += [nn.AvgPool2d(kernel_size=2, stride=2, padding=1)]
         else:
@@ -96,20 +105,24 @@ def vgg(in_channels):
                        nn.BatchNorm2d(v),
                        nn.PReLU(v)]
             in_channels = v
-    layers += [nn.AvgPool2d(kernel_size=3, stride=1, padding=1),
-               nn.Conv2d(in_channels, 256, kernel_size=3),
-               nn.BatchNorm2d(256),
-               nn.PReLU(256),
-               nn.Conv2d(256, 256, kernel_size=1),
-               nn.BatchNorm2d(256),
-               nn.PReLU(256)]
+    if phase != 'test':
+        layers += [nn.AvgPool2d(kernel_size=3, stride=1, padding=1),
+                   nn.Conv2d(in_channels, 256, kernel_size=3),
+                   nn.BatchNorm2d(256),
+                   nn.PReLU(256),
+                   nn.Conv2d(256, 256, kernel_size=1),
+                   nn.BatchNorm2d(256),
+                   nn.PReLU(256)]
     return layers
 
 
-def multibox(base, num_classes):
+def multibox(base, num_classes, phase):
     loc, conf, regr = [], [], []
 
-    base_sources = [27, 47]
+    if phase == 'test':
+        base_sources = [27]
+    else:
+        base_sources = [27, 47]
 
     for k, v in enumerate(base_sources):
         loc += [nn.Conv2d(base[v].out_channels, 2,
@@ -126,7 +139,7 @@ def build_ssd(phase, ssd_settings, qtype='full'):
 
     input_dimensions = ssd_settings['input_dimensions']
 
-    base = vgg(input_dimensions[0])
-    head = multibox(base, ssd_settings['n_classes'])
+    base = vgg(input_dimensions[0], phase)
+    head = multibox(base, ssd_settings['n_classes'], phase)
 
     return SSD(phase, base, head, ssd_settings)
