@@ -223,8 +223,10 @@ if __name__ == '__main__':
 
     dummy_input = torch.unsqueeze(torch.randn(in_dim), 0)
     mac = GetResources(net, dummy_input=dummy_input).profile() / 1e9
+    params = sum(p.numel() for p in net.parameters() if p.requires_grad)
     if args.verbose:
         print('Total OPS: {0:.3f}G'.format(mac))
+        print('Total network parameters: {0}'.format(params))
 
     plot = Plotting(save_dir=config['output']['plots'])
     plot.draw_precision_recall(plotting_results, jet_names)

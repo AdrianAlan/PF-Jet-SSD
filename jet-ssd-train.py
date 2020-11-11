@@ -107,11 +107,6 @@ def execute(name, qtype, dataset, output, training_pref, ssd_settings,
     net = torch.nn.DataParallel(ssd_net)
     net = net.cuda()
 
-    # Print total number of parameters
-    if verbose:
-        params = sum(p.numel() for p in net.parameters() if p.requires_grad)
-        print('Total network parameters: %s' % params)
-
     # Set training objective parameters
     optimizer = optim.SGD(net.parameters(), lr=1e-3,
                           momentum=training_pref['momentum'],
