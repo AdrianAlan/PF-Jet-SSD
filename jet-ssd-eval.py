@@ -214,8 +214,7 @@ if __name__ == '__main__':
                                   overlap_threshold=ot, top_k=top_k,
                                   verbose=args.verbose)
         if args.verbose:
-            print('')
-            print('Average inference time: {0:.3f} ms'.format(it))
+            print('\nAverage inference time: {0:.3f} ms'.format(it))
             for _, _, c, ap in res:
                 print('Average precision for class {0}: {1:.3f}'.format(c, ap))
 
