@@ -10,10 +10,10 @@ from torch.autograd import Variable
 
 class SSD(nn.Module):
 
-    def __init__(self, phase, base, head, ssd_settings):
+    def __init__(self, base, head, ssd_settings, inference):
         super(SSD, self).__init__()
 
-        self.phase = phase
+        self.inference = inference
         self.vgg = nn.ModuleList(base)
         self.loc = nn.ModuleList(head[0])
         self.priorbox = PriorBox()
@@ -28,7 +28,7 @@ class SSD(nn.Module):
                   'steps': ssd_settings['steps'],
                   'size': ssd_settings['object_size']}
 
-        if phase == 'test':
+        if self.inference:
             config['feature_maps'] = [config['feature_maps'][0]]
             config['steps'] = [config['steps'][0]]
             self.softmax = nn.Softmax(dim=-1)
@@ -47,7 +47,7 @@ class SSD(nn.Module):
         for k in range(33):
             x = self.vgg[k](x)
         sources.append(self.L2Norm1(x))
-        if self.phase != 'test':
+        if not self.inference:
             for k in range(33, len(self.vgg)):
                 x = self.vgg[k](x)
             sources.append(self.L2Norm2(x))
@@ -62,7 +62,7 @@ class SSD(nn.Module):
         regr = torch.cat([o.view(o.size(0), -1) for o in regr], 1)
 
         # Apply correct output layer
-        if self.phase == "test":
+        if self.inference:
             output = self.detect.apply(
                 loc.view(loc.size(0), -1, 2),
                 self.softmax(conf.view(conf.size(0), -1, self.num_classes)),
@@ -90,9 +90,9 @@ class SSD(nn.Module):
         return False
 
 
-def vgg(in_channels, phase):
+def vgg(in_channels, inference):
     layers = []
-    if phase == 'test':
+    if inference:
         cfg = [32, 32, 'P', 64, 64, 'P', 128, 128, 128, 'P', 256, 256, 256]
     else:
         cfg = [32, 32, 'P', 64, 64, 'P', 128, 128, 128, 'P', 256, 256, 256,
@@ -105,21 +105,24 @@ def vgg(in_channels, phase):
                        nn.BatchNorm2d(v),
                        nn.PReLU(v)]
             in_channels = v
-    if phase != 'test':
-        layers += [nn.AvgPool2d(kernel_size=3, stride=1, padding=1),
-                   nn.Conv2d(in_channels, 256, kernel_size=3),
-                   nn.BatchNorm2d(256),
-                   nn.PReLU(256),
-                   nn.Conv2d(256, 256, kernel_size=1),
-                   nn.BatchNorm2d(256),
-                   nn.PReLU(256)]
+
+    if inference:
+        return layers
+
+    layers += [nn.AvgPool2d(kernel_size=3, stride=1, padding=1),
+               nn.Conv2d(in_channels, 256, kernel_size=3),
+               nn.BatchNorm2d(256),
+               nn.PReLU(256),
+               nn.Conv2d(256, 256, kernel_size=1),
+               nn.BatchNorm2d(256),
+               nn.PReLU(256)]
     return layers
 
 
-def multibox(base, num_classes, phase):
+def multibox(base, num_classes, inference):
     loc, conf, regr = [], [], []
 
-    if phase == 'test':
+    if inference:
         base_sources = [27]
     else:
         base_sources = [27, 47]
@@ -135,11 +138,11 @@ def multibox(base, num_classes, phase):
     return (loc, conf, regr)
 
 
-def build_ssd(phase, ssd_settings):
+def build_ssd(ssd_settings, inference=False):
 
     input_dimensions = ssd_settings['input_dimensions']
 
-    base = vgg(input_dimensions[0], phase)
-    head = multibox(base, ssd_settings['n_classes'], phase)
+    base = vgg(input_dimensions[0], inference)
+    head = multibox(base, ssd_settings['n_classes'], inference)
 
-    return SSD(phase, base, head, ssd_settings)
+    return SSD(base, head, ssd_settings, inference)

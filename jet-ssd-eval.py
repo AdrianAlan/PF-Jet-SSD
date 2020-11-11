@@ -202,7 +202,7 @@ if __name__ == '__main__':
     for source_path in [args.fpn_source_path, args.twn_source_path]:
         if args.verbose:
             print('Testing {0} model'.format(source_path))
-        net = build_ssd('test', ssd_settings)
+        net = build_ssd(ssd_settings, inference=True)
         net.load_weights(source_path)
         net.eval()
         net = net.cuda()

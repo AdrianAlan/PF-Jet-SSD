@@ -86,7 +86,7 @@ def execute(name, qtype, dataset, output, training_pref, ssd_settings,
                                       shuffle=False)
 
     # Build SSD network
-    ssd_net = build_ssd('train', ssd_settings)
+    ssd_net = build_ssd(ssd_settings)
     if verbose:
         print(ssd_net)
 
