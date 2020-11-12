@@ -98,8 +98,8 @@ def execute(name, qtype, dataset, output, training_pref, ssd_settings,
     else:
         ssd_net.vgg.apply(weights_init)
         ssd_net.loc.apply(weights_init)
-        ssd_net.conf.apply(weights_init)
-        ssd_net.regr.apply(weights_init)
+        ssd_net.cnf.apply(weights_init)
+        ssd_net.reg.apply(weights_init)
 
     # Data parallelization
     cudnn.benchmark = True
