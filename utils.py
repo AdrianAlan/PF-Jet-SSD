@@ -217,10 +217,7 @@ class GetResources():
         output = torch.zeros((y.size()[:1] + y.size()[2:])).numel()
         # Cout x Cin x Kw x Kh
         kernel_ops = m.weight.nelement()
-        if m.bias is not None:
-            # Cout x 1
-            kernel_ops += + m.bias.nelement()
-        # x N x H x W x Cout x (Cin x Kw x Kh + bias)
+        # x N x H x W x Cout x (Cin x Kw x Kh)
         m.total_ops += torch.DoubleTensor([int(output * kernel_ops)]).cuda()
 
     def count_bn(self, m, x, y):

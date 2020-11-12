@@ -41,7 +41,6 @@ def collate_fn(batch):
 def weights_init(m):
     if isinstance(m, nn.Conv2d):
         init.xavier_uniform_(m.weight.data)
-        m.bias.data.zero_()
 
 
 def get_data_loader(source_path, batch_size, num_workers, input_dimensions,

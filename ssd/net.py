@@ -101,7 +101,8 @@ def vgg(in_channels, inference):
         if v == 'P':
             layers += [nn.AvgPool2d(kernel_size=2, stride=2, padding=1)]
         else:
-            layers += [nn.Conv2d(in_channels, v, kernel_size=3, padding=1),
+            layers += [nn.Conv2d(in_channels, v, kernel_size=3, padding=1,
+                                 bias=False),
                        nn.BatchNorm2d(v),
                        nn.PReLU(v)]
             in_channels = v
@@ -110,10 +111,10 @@ def vgg(in_channels, inference):
         return layers
 
     layers += [nn.AvgPool2d(kernel_size=3, stride=1, padding=1),
-               nn.Conv2d(in_channels, 256, kernel_size=3),
+               nn.Conv2d(in_channels, 256, kernel_size=3, bias=False),
                nn.BatchNorm2d(256),
                nn.PReLU(256),
-               nn.Conv2d(256, 256, kernel_size=1),
+               nn.Conv2d(256, 256, kernel_size=1, bias=False),
                nn.BatchNorm2d(256),
                nn.PReLU(256)]
     return layers
@@ -129,11 +130,11 @@ def multibox(base, num_classes, inference):
 
     for k, v in enumerate(base_sources):
         loc += [nn.Conv2d(base[v].out_channels, 2,
-                          kernel_size=3, padding=1)]
+                          kernel_size=3, padding=1, bias=False)]
         conf += [nn.Conv2d(base[v].out_channels, num_classes,
-                           kernel_size=3, padding=1)]
+                           kernel_size=3, padding=1, bias=False)]
         regr += [nn.Conv2d(base[v].out_channels, 1,
-                           kernel_size=3, padding=1)]
+                           kernel_size=3, padding=1, bias=False)]
 
     return (loc, conf, regr)
 
