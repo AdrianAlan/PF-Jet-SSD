@@ -128,7 +128,7 @@ def multibox(base, num_classes, inference):
     else:
         base_sources = [27, 47]
 
-    for k, v in enumerate(base_sources):
+    for v in base_sources:
         loc += [nn.Conv2d(base[v].out_channels, 2,
                           kernel_size=3, padding=1, bias=False)]
         conf += [nn.Conv2d(base[v].out_channels, num_classes,
