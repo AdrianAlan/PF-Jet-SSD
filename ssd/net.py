@@ -35,7 +35,7 @@ class SSD(nn.Module):
             self.softmax = nn.Softmax(dim=-1)
             self.detect = Detect()
         else:
-            self.l2norm_2 = L2Norm(256, 20)
+            self.l2norm_2 = L2Norm(1024, 20)
 
         self.priors = Variable(self.priorbox.apply(config))
 
@@ -97,7 +97,7 @@ def vgg(c, inference):
         cfg = [32, 32, 'P', 64, 64, 'P', 128, 128, 128, 'P', 256, 256, 256]
     else:
         cfg = [32, 32, 'P', 64, 64, 'P', 128, 128, 128, 'P', 256, 256, 256,
-               'P', 256, 256, 256]
+               'P', 512, 512, 512]
 
     for v in cfg:
         if v == 'P':
@@ -112,12 +112,12 @@ def vgg(c, inference):
         return layers
 
     layers += [nn.AvgPool2d(kernel_size=3, stride=1, padding=1),
-               nn.Conv2d(c, 256, kernel_size=3, bias=False),
-               nn.BatchNorm2d(256),
-               nn.PReLU(256),
-               nn.Conv2d(256, 256, kernel_size=1, bias=False),
-               nn.BatchNorm2d(256),
-               nn.PReLU(256)]i
+               nn.Conv2d(c, 1024, kernel_size=3, bias=False),
+               nn.BatchNorm2d(1024),
+               nn.PReLU(1024),
+               nn.Conv2d(1024, 1024, kernel_size=1, bias=False),
+               nn.BatchNorm2d(1024),
+               nn.PReLU(1024)]
 
     return layers
 
@@ -128,7 +128,7 @@ def multibox(n_classes, inference):
     if inference:
         source_channels = [256]
     else:
-        source_channels = [256, 256]
+        source_channels = [256, 1024]
 
     for c in source_channels:
         loc += [nn.Conv2d(c, 2, kernel_size=3, padding=1, bias=False)]
