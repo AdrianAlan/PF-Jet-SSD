@@ -86,6 +86,17 @@ class SSD(nn.Module):
         if ext == '.pkl' or '.pth':
             state_dict = torch.load(file_path, map_location=lambda s, loc: s)
             self.load_state_dict(state_dict, strict=False)
+            for o in [self.vgg]:
+                for m in o.modules():
+                    if isinstance(m, nn.Conv2d):
+                        if m.in_channels == 2:
+                            tmp = m.weight.data.clone()
+                            m.weight.data.copy_(tmp.half())
+            for o in [self.loc, self.cnf, self.reg]:
+                for m in o.modules():
+                    if isinstance(m, nn.Conv2d):
+                        tmp = m.weight.data.clone()
+                        m.weight.data.copy_(tmp.half())
             return True
         return False
 
