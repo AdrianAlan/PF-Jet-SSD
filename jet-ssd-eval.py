@@ -1,5 +1,3 @@
-from __future__ import print_function
-
 import argparse
 import h5py
 import numpy as np
@@ -15,7 +13,7 @@ from ssd.generator import CalorimeterJetDataset
 from ssd.net import build_ssd
 from time import time
 from tqdm import tqdm
-from utils import Plotting, GetResources
+from utils import Plotting, GetResources, set_logging
 
 
 def collate_fn(batch):
@@ -165,9 +163,9 @@ def test_net(model, dataset, im_size, conf_threshold=0., batch_size=50,
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser('Evaluate Jet Detection Model')
-    parser.add_argument('fpn_source_path', type=str,
+    parser.add_argument('fpn', type=str,
                         help='Full Precision Network model source path')
-    parser.add_argument('twn_source_path', type=str,
+    parser.add_argument('twn', type=str,
                         help='Ternary Weight Network model source path')
     parser.add_argument('config', type=str, help="Path to config file")
     parser.add_argument('-v', '--verbose', action="store_true",
@@ -199,9 +197,11 @@ if __name__ == '__main__':
     loader, h5 = get_data_loader(config['dataset']['test'],
                                  bs, workers, in_dim, jet_size)
 
-    for source_path in [args.fpn_source_path, args.twn_source_path]:
-        if args.verbose:
-            print('Testing {0} model'.format(source_path))
+    for name in [args.fpn, args.twn]:
+        base = '{}/{}'.format(config['output']['model'], name)
+        source_path = '{}.pth'.format(base)
+        logger = set_logging('Test_SSD', '{}.log'.format(base), args.verbose)
+        logger.info('Testing {0} model'.format(source_path))
         net = build_ssd(ssd_settings, inference=True)
         net.load_weights(source_path)
         net.eval()
@@ -213,20 +213,18 @@ if __name__ == '__main__':
                                   num_classes=num_classes,
                                   overlap_threshold=ot, top_k=top_k,
                                   verbose=args.verbose)
-        if args.verbose:
-            print('\nAverage inference time: {0:.3f} ms'.format(it))
-            for _, _, c, ap in res:
-                print('AP for {0} jets: {1:.3f}'.format(jet_names[c], ap))
+        logger.debug('Average inference time: {0:.3f} ms'.format(it))
+        for _, _, c, ap in res:
+            logger.debug('AP for {0} jets: {1:.3f}'.format(jet_names[c], ap))
 
         plotting_results.append(res)
         plotting_deltas.append(delta)
 
-    dummy_input = torch.unsqueeze(torch.randn(in_dim), 0)
-    mac = GetResources(net, dummy_input=dummy_input).profile() / 1e9
-    params = sum(p.numel() for p in net.parameters() if p.requires_grad)
-    if args.verbose:
-        print('Total OPS: {0:.3f}G'.format(mac))
-        print('Total network parameters: {0}'.format(params))
+        dummy_input = torch.unsqueeze(torch.randn(in_dim), 0)
+        mac = GetResources(net, dummy_input=dummy_input).profile() / 1e9
+        params = sum(p.numel() for p in net.parameters() if p.requires_grad)
+        logger.debug('Total OPS: {0:.3f}G'.format(mac))
+        logger.debug('Total network parameters: {0}'.format(params))
 
     plot = Plotting(save_dir=config['output']['plots'])
     plot.draw_precision_recall(plotting_results, jet_names)

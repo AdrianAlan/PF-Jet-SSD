@@ -1,3 +1,4 @@
+import logging
 import numpy as np
 import torch
 
@@ -5,22 +6,21 @@ import torch
 class EarlyStopping:
 
     def __init__(self, patience=7, delta=10e-6,
-                 save_best=True, save_path='./', verbose=False):
+                 save_best=True, save_path='./'):
         """Early stopping checkpont"""
 
         self.patience = patience
         self.delta = delta
         self.save_best = save_best
         self.save_path = save_path
-        self.verbose = verbose
 
         self.counter = 0
         self.best_score = np.Inf
         self.early_stop = False
 
-        if self.verbose:
-            print("Initiated early stopping with patience {}.".format(
-                  self.patience))
+        self.logger = logging.getLogger('Train_SSD')
+        self.logger.info("Initiated early stopping with patience {}.".format(
+                         self.patience))
 
     def __call__(self, loss, model):
         """Veryfy if training should be terminated"""
@@ -31,15 +31,15 @@ class EarlyStopping:
             if self.save_best:
                 self.save_checkpoint(model)
         else:
+            self.logger.debug("Validation loss did not decrease")
             self.counter += 1  # Increment counter
             if self.counter == self.patience:
-                print("Stopped by checkpoint!")
+                self.logger.info("Stopped by checkpoint!")
                 return True
         return False
 
     def save_checkpoint(self, model):
         """Saves model when validation loss decrease."""
 
-        if self.verbose:
-            print("Checkpoint: saving model")
+        self.logger.debug("Saving model to {}".format(self.save_path))
         torch.save(model.state_dict(), self.save_path)

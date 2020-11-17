@@ -1,5 +1,6 @@
 import argparse
 import h5py
+import logging
 import numpy as np
 import pathlib
 import os
@@ -21,7 +22,7 @@ from ssd.layers.modules import MultiBoxLoss
 from ssd.generator import CalorimeterJetDataset
 from ssd.net import build_ssd
 from ssd.qutils import get_delta, get_alpha, to_ternary
-from utils import Plotting
+from utils import Plotting, set_logging
 
 
 def adjust_learning_rate(optimizer, epoch, learning_rates):
@@ -64,8 +65,13 @@ def batch_step(x, y, optimizer, net, criterion):
     return criterion(output, y)
 
 
+def get_loss_info(x):
+    return ('Total loss {:.5f}, Localization {:.5f} ' +
+            'Classification {:.5f} Regresion {:.5f}').format(x.sum(), *x)
+
+
 def execute(name, qtype, dataset, output, training_pref, ssd_settings,
-            trained_model_path=None, verbose=False):
+            logger, trained_model_path=None, verbose=False):
 
     ssd_settings['n_classes'] += 1
     quantized = (qtype == 'ternary')
@@ -86,11 +92,7 @@ def execute(name, qtype, dataset, output, training_pref, ssd_settings,
 
     # Build SSD network
     ssd_net = build_ssd(ssd_settings)
-    if verbose:
-        print(ssd_net)
-
-    with open('{}/{}.txt'.format(output['model'], name), 'w') as f:
-        f.write(str(ssd_net))
+    logger.debug('SSD architecture:\n{}'.format(str(ssd_net)))
 
     # Initialize weights
     if trained_model_path:
@@ -111,8 +113,7 @@ def execute(name, qtype, dataset, output, training_pref, ssd_settings,
                           momentum=training_pref['momentum'],
                           weight_decay=training_pref['weight_decay'])
     cp_es = EarlyStopping(patience=training_pref['patience'],
-                          save_path='%s/%s.pth' % (output['model'], name),
-                          verbose=verbose)
+                          save_path='%s/%s.pth' % (output['model'], name))
     criterion = MultiBoxLoss(ssd_settings['n_classes'],
                              min_overlap=ssd_settings['overlap_threshold'])
 
@@ -125,7 +126,6 @@ def execute(name, qtype, dataset, output, training_pref, ssd_settings,
         # Start model training
         if verbose:
             tr = trange(len(train_loader), file=sys.stdout)
-            tr.set_description('Epoch {}'.format(epoch))
         all_epoch_loss = torch.zeros(3)
         net.train()
 
@@ -171,14 +171,12 @@ def execute(name, qtype, dataset, output, training_pref, ssd_settings,
             all_epoch_loss += torch.tensor([l.item(), c.item(), r.item()])
             av_epoch_loss = all_epoch_loss / (batch_index + 1)
 
+            info = 'Epoch {}, {}'.format(epoch, get_loss_info(av_epoch_loss))
             if verbose:
-                tr.set_description(
-                    ('Epoch {} Loss {:.5f} Localization {:.5f} ' +
-                     'Classification {:.5f} Regresion {:.5f}').format(
-                     epoch, av_epoch_loss.sum(), av_epoch_loss[0],
-                     av_epoch_loss[1], av_epoch_loss[2]))
+                tr.set_description(info)
                 tr.update(1)
 
+        logger.debug(info)
         train_loss = torch.cat((train_loss, av_epoch_loss.unsqueeze(1)), 1)
         if verbose:
             tr.close()
@@ -186,7 +184,6 @@ def execute(name, qtype, dataset, output, training_pref, ssd_settings,
         # Start model validation
         if verbose:
             tr = trange(len(val_loader), file=sys.stdout)
-            tr.set_description('Validation')
         all_epoch_loss = torch.zeros(3)
         net.eval()
 
@@ -205,15 +202,12 @@ def execute(name, qtype, dataset, output, training_pref, ssd_settings,
                 l, c, r = batch_step(images, targets, None, net, criterion)
                 all_epoch_loss += torch.tensor([l.item(), c.item(), r.item()])
                 av_epoch_loss = all_epoch_loss / (batch_index + 1)
-
+                info = 'Validation, {}'.format(get_loss_info(av_epoch_loss))
                 if verbose:
-                    tr.set_description(
-                        ('Validation Loss {:.5f} Localization {:.5f} ' +
-                         'Classification {:.5f} Regresion {:.5f}').format(
-                         av_epoch_loss.sum(), av_epoch_loss[0],
-                         av_epoch_loss[1], av_epoch_loss[2]))
+                    tr.set_description(info)
                     tr.update(1)
 
+            logger.debug(info)
             val_loss = torch.cat((val_loss, av_epoch_loss.unsqueeze(1)), 1)
             if verbose:
                 tr.close()
@@ -244,6 +238,11 @@ if __name__ == '__main__':
     args = parser.parse_args()
     config = yaml.safe_load(open(args.config))
 
+    logger = set_logging('Train_SSD',
+                         '{}/{}.log'.format(config['output']['model'],
+                                            args.name),
+                         args.verbose)
+
     if torch.cuda.is_available():
         torch.set_default_tensor_type('torch.cuda.FloatTensor')
     else:
@@ -255,5 +254,6 @@ if __name__ == '__main__':
             config['output'],
             config['training_pref'],
             config['ssd_settings'],
+            logger=logger,
             trained_model_path=args.trained_model_path,
             verbose=args.verbose)

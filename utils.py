@@ -1,3 +1,4 @@
+import logging
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
@@ -272,3 +273,24 @@ class GetResources():
         total_ops = dfs_count(self.net)
 
         return total_ops
+
+
+def set_logging(name, filename, verbose):
+    logger = logging.getLogger(name)
+    fh = logging.FileHandler(filename)
+    ch = logging.StreamHandler()
+
+    logger.setLevel(logging.DEBUG)
+    fh.setLevel(logging.DEBUG)
+    if verbose:
+        ch.setLevel(logging.INFO)
+
+    f = logging.Formatter('%(asctime)s:%(name)s:%(levelname)s:%(message)s',
+                          datefmt='%m/%d/%Y %I:%M')
+    fh.setFormatter(f)
+    ch.setFormatter(f)
+
+    logger.addHandler(fh)
+    logger.addHandler(ch)
+
+    return logger
