@@ -2,13 +2,16 @@ import h5py
 import numpy as np
 import torch
 
+from ssd import qutils
+
 
 class CalorimeterJetDataset(torch.utils.data.Dataset):
 
-    def __init__(self, input_dimensions, object_size,
+    def __init__(self, input_dimensions, object_size, input_bits=8,
                  hdf5_dataset=None, return_pt=False):
         """Generator for calorimeter and jet data"""
 
+        self.steps = pow(2, input_bits)
         self.hdf5_dataset = hdf5_dataset
         self.return_pt = return_pt
 
@@ -66,7 +69,7 @@ class CalorimeterJetDataset(torch.utils.data.Dataset):
         energy = energy / scaler
 
         i = torch.LongTensor([indices_channels, indices_eta, indices_phi])
-        v = torch.FloatTensor(energy)
+        v = qutils.uniform_quantization(torch.FloatTensor(energy), self.steps)
         pixels = torch.sparse.FloatTensor(i, v, torch.Size([self.channels,
                                                             self.width,
                                                             self.height]))

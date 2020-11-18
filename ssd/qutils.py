@@ -18,6 +18,10 @@ def get_alpha(tensor, delta):
     return torch.repeat_interleave(alpha, n).view(tensor.size())
 
 
+def uniform_quantization(tensor, step):
+    return torch.round(tensor * step) / step
+
+
 def to_ternary(tensor, delta=None, alpha=None):
     if delta is None:
         delta = get_delta(tensor)
