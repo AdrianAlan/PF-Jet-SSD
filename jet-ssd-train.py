@@ -219,6 +219,12 @@ def execute(name, qtype, dataset, output, training_pref, ssd_settings,
             if cp_es(av_epoch_loss.sum(0), ssd_net):
                 break
 
+            if quantized:
+                for m in net.modules():
+                    if isinstance(m, nn.Conv2d):
+                        if m.in_channels > 2 and m.out_channels > 4:
+                            m.weight.org.copy_(m.weight.data)
+
     h5t.close()
     h5v.close()
 
