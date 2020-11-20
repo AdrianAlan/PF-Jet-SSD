@@ -4,171 +4,142 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.backends.cudnn as cudnn
-import torch.utils.data as data
 import sys
 import yaml
 
 from sklearn.metrics import average_precision_score, precision_recall_curve
-from ssd.generator import CalorimeterJetDataset
 from ssd.net import build_ssd
-from time import time
+from timeit import default_timer as timer
 from tqdm import tqdm
-from utils import Plotting, GetResources, set_logging
+from utils import *
 
 
-def collate_fn(batch):
-    transposed_data = list(zip(*batch))
-    inp = torch.stack(transposed_data[0], 0)
-    tgt = list(transposed_data[1])
-    return inp, tgt
-
-
-def get_data_loader(source_path, batch_size, num_workers, input_dimensions,
-                    object_size, shuffle=True):
-    h5 = h5py.File(source_path, 'r')
-    generator = CalorimeterJetDataset(input_dimensions, object_size,
-                                      hdf5_dataset=h5, return_pt=True)
-    return torch.utils.data.DataLoader(generator,
-                                       batch_size=batch_size,
-                                       collate_fn=collate_fn,
-                                       shuffle=shuffle,
-                                       num_workers=num_workers), h5
-
-
-def test_net(model, dataset, im_size, conf_threshold=0., batch_size=50,
-             overlap_threshold=.1, num_classes=3, epsilon=10**-6, top_k=200,
-             verbose=False):
+def execute(model, dataset, im_size, conf_threshold=0., batch_size=50,
+            overlap_threshold=.1, num_classes=3, epsilon=10**-6, top_k=200,
+            verbose=False):
 
     results = [torch.empty(0, 2) for _ in range(num_classes)]
     deltas = torch.empty((0, 5))
     inf_time = torch.empty(0)
 
-    with torch.no_grad():
+    if args.verbose:
+        progress_bar = tqdm(total=len(dataset), desc='Evaluating events')
 
-        if args.verbose:
-            progress_bar = tqdm(total=len(dataset), desc='Evaluating events')
+    for X, y in dataset:
 
-        for X, y in dataset:
+        t_start = timer()
+        pred = model(X.cuda()).data
+        t_end = timer()
+        inf_time = torch.cat((inf_time, torch.Tensor([t_end-t_start])))
 
-            t_start = time()
-            pred = model(X.cuda()).data
-            t_end = time()
-            inf_time = torch.cat((inf_time, torch.Tensor([t_end-t_start])))
+        for idx in range(batch_size):
+            detections, targets = pred[idx].cuda(), y[idx].cuda()
+            targets[:, [0, 2]] *= im_size[0]
+            targets[:, [1, 3]] *= im_size[1]
+            all_detections = torch.empty((0, 8))
 
-            for idx in range(batch_size):
-                detections, targets = pred[idx].cuda(), y[idx].cuda()
-                targets[:, 0] *= im_size[0]
-                targets[:, 2] *= im_size[0]
-                targets[:, 1] *= im_size[1]
-                targets[:, 3] *= im_size[1]
-                all_dets = torch.empty((0, 8))
+            for class_id, detections in enumerate(detections[1:]):
 
-                for class_id in range(1, detections.size(0)):
-                    dets = detections[class_id, :]
+                # Filter detections above given threshold
+                detections = detections[detections[:, 0] > conf_threshold]
 
-                    # Filter detections above given threshold
-                    dets = dets[dets[:, 0] > conf_threshold]
+                if detections.size(0) == 0:
+                    continue
 
-                    if dets.size(0) == 0:
+                bboxes = detections[:, 1:5]
+                bboxes[:, [0, 2]] *= im_size[0]
+                bboxes[:, [1, 3]] *= im_size[1]
+
+                scores = detections[:, 0].unsqueeze(1)
+                regres = detections[:, -1].unsqueeze(1)
+                labels = (class_id)*torch.ones(len(scores)).unsqueeze(1)
+                gt = torch.zeros(len(scores)).unsqueeze(1)
+
+                # Format: [xmin, ymin, xmax, ymax, label, score, gt, m]
+                detections = torch.cat((bboxes, labels, scores, gt, regres), 1)
+                all_detections = torch.cat((all_detections, detections))
+
+            # Sort by confidence
+            all_detections = all_detections[(-all_detections[:, 5]).argsort()]
+
+            # Select top k predictions
+            all_detections = all_detections[:top_k]
+
+            for t in targets:
+                detected = False
+
+                for x, d in enumerate(all_detections):
+                    xmin = torch.max(t[0], d[0])
+                    ymin = torch.max(t[1], d[1])
+                    xmax = torch.min(t[2], d[2])
+                    ymax = torch.min(t[3], d[3])
+
+                    w = torch.max(xmax - xmin, torch.tensor(0.))
+                    h = torch.max(ymax - ymin, torch.tensor(0.))
+                    intersection = w * h
+
+                    union = ((d[2] - d[0]) * (d[3] - d[1]) +
+                             (t[2] - t[0]) * (t[3] - t[1]) - intersection)
+
+                    overlap = intersection / (union + epsilon)
+
+                    if overlap < overlap_threshold:
                         continue
 
-                    boxes = dets[:, 1:5]
-                    boxes[:, 0] *= im_size[0]
-                    boxes[:, 2] *= im_size[0]
-                    boxes[:, 1] *= im_size[1]
-                    boxes[:, 3] *= im_size[1]
+                    if d[4] == t[4]:
+                        detected = True
+                        all_detections[x][6] = 1
 
-                    scores = dets[:, 0].unsqueeze(1)
-                    regres = dets[:, -1].unsqueeze(1)
-                    labels = (class_id-1)*torch.ones(len(scores)).unsqueeze(1)
-                    gt = torch.zeros(len(scores)).unsqueeze(1)
+                        # Divide by 115 to get correct resolution
+                        d_eta = ((t[0]+t[2])/2 - (d[0]+d[2])/2)/115
+                        d_phi = ((t[1]+t[3])/2 - (d[1]+d[3])/2)/115
+                        d_mass = (t[5] - d[7]) / (t[5] + epsilon)
+                        deltas = torch.cat((
+                            deltas,
+                            torch.Tensor([[t[4], t[6], d_eta, d_phi, d_mass]])
+                        ))
+                        break
 
-                    # Format: [xmin, ymin, xmax, ymax, label, score, gt, m]
-                    dets = torch.cat((boxes, labels, scores, gt, regres), 1)
-                    all_dets = torch.cat((all_dets, dets))
+                if not detected:
+                    fn = torch.cat((t[:5], torch.Tensor([0, 1, 1])))
+                    fn = fn.unsqueeze(0)
+                    all_detections = torch.cat((all_detections, fn))
 
-                # Sort by confidence
-                all_dets = all_dets[(-all_dets[:, 5]).argsort()]
-
-                # Select top k predictions
-                all_dets = all_dets[:top_k]
-
-                for t in targets:
-                    detected = False
-
-                    for x, d in enumerate(all_dets):
-                        ixmin = torch.max(t[0], d[0])
-                        iymin = torch.max(t[1], d[1])
-                        ixmax = torch.min(t[2], d[2])
-                        iymax = torch.min(t[3], d[3])
-
-                        iw = torch.max(ixmax - ixmin, torch.tensor(0.))
-                        ih = torch.max(iymax - iymin, torch.tensor(0.))
-                        intersection = iw * ih
-
-                        union = ((d[2] - d[0]) * (d[3] - d[1]) +
-                                 (t[2] - t[0]) * (t[3] - t[1]) - intersection)
-
-                        overlap = intersection / (union + epsilon)
-
-                        if overlap > overlap_threshold:
-                            if d[4] == t[4]:
-
-                                detected = True
-                                all_dets[x][6] = 1
-
-                                # Divide by 115 to get correct resolution
-                                d_eta = ((t[0]+(t[2]-t[0])/2) -
-                                         (d[0]+(d[2]-d[0])/2))/115
-                                d_phi = ((t[1]+(t[3]-t[1])/2) -
-                                         (d[1]+(d[3]-d[1])/2))/115
-                                d_mass = (t[5] - d[7]) / (t[5] + epsilon)
-                                deltas = torch.cat((deltas,
-                                                    torch.Tensor([[t[4], t[6],
-                                                                   d_eta,
-                                                                   d_phi,
-                                                                   d_mass]])))
-                                break
-
-                    if not detected:
-                        fn = torch.cat((t[:5],
-                                        torch.Tensor([0, 1, 1]))).unsqueeze(0)
-                        all_dets = torch.cat((all_dets, fn))
-
-                for c in range(num_classes):
-                    cls_dets = all_dets[all_dets[:, 4] == c]
-                    results[c] = torch.cat((results[c], cls_dets[:, [6, 5]]))
-
-            if args.verbose:
-                progress_bar.update(1)
+            for c in range(num_classes):
+                cls_dets = all_detections[all_detections[:, 4] == c]
+                results[c] = torch.cat((results[c], cls_dets[:, [6, 5]]))
 
         if args.verbose:
-            progress_bar.close()
+            progress_bar.update(1)
 
-        it = inf_time.mean()*1000/batch_size
+    if args.verbose:
+        progress_bar.close()
 
-        ret = []
-        for c in range(num_classes):
-            truth = results[c][:, 0].cpu().numpy()
-            score = results[c][:, 1].cpu().numpy()
-            p, r, _ = precision_recall_curve(truth, score)
-            ap = average_precision_score(truth, score)
-            ret.append((r, p, c, ap))
+    it = inf_time.mean()*1000/batch_size
 
-        deltas = torch.abs(deltas)
+    ret = []
+    for c in range(num_classes):
+        truth = results[c][:, 0].cpu().numpy()
+        score = results[c][:, 1].cpu().numpy()
+        p, r, _ = precision_recall_curve(truth, score)
+        ap = average_precision_score(truth, score)
+        ret.append((r, p, c, ap))
 
-        return it.cpu().numpy(), ret, deltas.cpu().numpy()
+    deltas = torch.abs(deltas)
+
+    return it.cpu().numpy(), ret, deltas.cpu().numpy()
 
 
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser('Evaluate Jet Detection Model')
     parser.add_argument('fpn', type=str,
-                        help='Full Precision Network model source path')
+                        help='Full Precision Network model name')
     parser.add_argument('twn', type=str,
-                        help='Ternary Weight Network model source path')
-    parser.add_argument('config', type=str, help="Path to config file")
-    parser.add_argument('-v', '--verbose', action="store_true",
+                        help='Ternary Weight Network model name')
+    parser.add_argument('config', action=IsValidFile, type=str,
+                        help='Path to config file')
+    parser.add_argument('-v', '--verbose', action='store_true',
                         help='Output verbosity')
     args = parser.parse_args()
     config = yaml.safe_load(open(args.config))
@@ -194,25 +165,28 @@ if __name__ == '__main__':
     plotting_results = []
     plotting_deltas = []
 
-    loader, h5 = get_data_loader(config['dataset']['test'],
-                                 bs, workers, in_dim, jet_size)
+    loader, h5 = get_data_loader(config['dataset']['test'], bs, workers,
+                                 in_dim, jet_size, return_pt=True)
 
     for name in [args.fpn, args.twn]:
         base = '{}/{}'.format(config['output']['model'], name)
         source_path = '{}.pth'.format(base)
+
         logger = set_logging('Test_SSD', '{}.log'.format(base), args.verbose)
         logger.info('Testing {0} model'.format(source_path))
+
         net = build_ssd(ssd_settings, inference=True)
         net.load_weights(source_path)
         net.eval()
         net = net.cuda()
         cudnn.benchmark = True
 
-        it, res, delta = test_net(net, loader, batch_size=bs,
-                                  conf_threshold=ct, im_size=in_dim[1:],
-                                  num_classes=num_classes,
-                                  overlap_threshold=ot, top_k=top_k,
-                                  verbose=args.verbose)
+        with torch.no_grad():
+            it, res, delta = execute(net, loader, batch_size=bs,
+                                     conf_threshold=ct, im_size=in_dim[1:],
+                                     num_classes=num_classes,
+                                     overlap_threshold=ot, top_k=top_k,
+                                     verbose=args.verbose)
         logger.debug('Average inference time: {0:.3f} ms'.format(it))
         for _, _, c, ap in res:
             logger.debug('AP for {0} jets: {1:.3f}'.format(jet_names[c], ap))

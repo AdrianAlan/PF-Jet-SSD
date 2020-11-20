@@ -1,14 +1,42 @@
+import argparse
+import h5py
 import logging
+import os
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
+import os
 import simplejson as json
 import torch
 import torch.nn as nn
 
 from matplotlib.lines import Line2D
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+from ssd.generator import CalorimeterJetDataset
 from ssd.layers import *
+
+
+class IsReadableDir(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        prospective_dir = values
+        if not os.path.isdir(prospective_dir):
+            raise argparse.ArgumentTypeError(
+                    '{0} is not a valid path'.format(prospective_dir))
+        if os.access(prospective_dir, os.R_OK):
+            setattr(namespace, self.dest, prospective_dir)
+        else:
+            raise argparse.ArgumentTypeError(
+                    '{0} is not a readable directory'.format(prospective_dir))
+
+
+class IsValidFile(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        prospective_file = values
+        if not os.path.exists(prospective_file):
+            raise argparse.ArgumentTypeError(
+                    '{0} is not a valid file'.format(prospective_file))
+        else:
+            setattr(namespace, self.dest, prospective_file)
 
 
 class Plotting():
@@ -36,7 +64,7 @@ class Plotting():
         return OffsetImage(plt.imread('./plots/hls4mllogo.jpg', format='jpg'),
                            zoom=0.08)
 
-    def draw_loss(self, data_train, data_val, type='full',
+    def draw_loss(self, data_train, data_val, quantized,
                   keys=['Localization', 'Classification', 'Regression']):
         """Plots the training and validation loss"""
 
@@ -61,8 +89,11 @@ class Plotting():
                 transform=ax.transAxes,
                 color=self.color_palette['grey']['shade_900'],
                 fontsize=13)
-
-        fig.savefig('%s/loss-%s' % (self.save_dir, type))
+        if quantized:
+            name = 'ternary'
+        else:
+            name = 'full'
+        fig.savefig('%s/loss-%s' % (self.save_dir, name))
         plt.close(fig)
 
     def draw_precision_recall(self, data, names):
@@ -212,21 +243,15 @@ class GetResources():
     def zero_ops(self, m, x, y):
         m.total_ops += torch.DoubleTensor([int(0)]).cuda()
 
-    def count_conv(self, m, x, y):
-        x = x[0]
-        # N x H x W (exclude Cout)
-        output = torch.zeros((y.size()[:1] + y.size()[2:])).numel()
-        # Cout x Cin x Kw x Kh
-        kernel_ops = m.weight.nelement()
-        # x N x H x W x Cout x (Cin x Kw x Kh)
-        m.total_ops += torch.DoubleTensor([int(output * kernel_ops)]).cuda()
-
     def count_bn(self, m, x, y):
         x = x[0]
-        nelements = x.numel()
-        if not m.training:
-            nelements = 2 * nelements
+        nelements = 2 * x.numel()
         m.total_ops += torch.DoubleTensor([int(nelements)]).cuda()
+
+    def count_conv(self, m, x, y):
+        kernel_ops = torch.zeros(m.weight.size()[2:]).numel()
+        total_ops = y.nelement() * (m.in_channels // m.groups * kernel_ops)
+        m.total_ops += torch.DoubleTensor([int(total_ops)]).cuda()
 
     def count_prelu(self, m, x, y):
         x = x[0]
@@ -241,7 +266,6 @@ class GetResources():
             nn.Conv2d: self.count_conv,
             nn.BatchNorm2d: self.count_bn,
             nn.PReLU: self.count_prelu,
-            nn.MaxPool2d: self.zero_ops,
             nn.AvgPool2d: self.zero_ops
         }
 
@@ -267,12 +291,32 @@ class GetResources():
                     ops = dfs_count(m, prefix=prefix + "\t")
                 total_ops += ops
             return total_ops
+        self.net.eval()
         self.net.apply(add_hooks)
         with torch.no_grad():
             self.net(self.dummy_input)
         total_ops = dfs_count(self.net)
 
         return total_ops
+
+
+def collate_fn(batch):
+    transposed_data = list(zip(*batch))
+    inp = torch.stack(transposed_data[0], 0)
+    tgt = list(transposed_data[1])
+    return inp, tgt
+
+
+def get_data_loader(source_path, batch_size, num_workers, input_dimensions,
+                    object_size, return_pt=False, shuffle=True):
+    h5 = h5py.File(source_path, 'r')
+    generator = CalorimeterJetDataset(input_dimensions, object_size,
+                                      hdf5_dataset=h5, return_pt=return_pt)
+    return torch.utils.data.DataLoader(generator,
+                                       batch_size=batch_size,
+                                       collate_fn=collate_fn,
+                                       shuffle=shuffle,
+                                       num_workers=num_workers), h5
 
 
 def set_logging(name, filename, verbose):

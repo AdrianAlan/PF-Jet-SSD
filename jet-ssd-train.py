@@ -22,7 +22,7 @@ from ssd.layers.modules import MultiBoxLoss
 from ssd.generator import CalorimeterJetDataset
 from ssd.net import build_ssd
 from ssd.qutils import get_delta, get_alpha, to_ternary
-from utils import Plotting, set_logging
+from utils import IsValidFile, Plotting, get_data_loader, set_logging
 
 
 def adjust_learning_rate(optimizer, epoch, learning_rates):
@@ -30,30 +30,6 @@ def adjust_learning_rate(optimizer, epoch, learning_rates):
         if step['epoch'] == epoch:
             for param_group in optimizer.param_groups:
                 param_group['lr'] = step['rate']
-
-
-def collate_fn(batch):
-    transposed_data = list(zip(*batch))
-    inp = torch.stack(transposed_data[0], 0)
-    tgt = list(transposed_data[1])
-    return inp, tgt
-
-
-def weights_init(m):
-    if isinstance(m, nn.Conv2d):
-        init.xavier_uniform_(m.weight.data)
-
-
-def get_data_loader(source_path, batch_size, num_workers, input_dimensions,
-                    object_size, shuffle=True):
-    h5 = h5py.File(source_path, 'r')
-    generator = CalorimeterJetDataset(input_dimensions, object_size,
-                                      hdf5_dataset=h5)
-    return torch.utils.data.DataLoader(generator,
-                                       batch_size=batch_size,
-                                       collate_fn=collate_fn,
-                                       shuffle=shuffle,
-                                       num_workers=num_workers), h5
 
 
 def batch_step(x, y, optimizer, net, criterion):
@@ -70,11 +46,10 @@ def get_loss_info(x):
             'Classification {:.5f} Regresion {:.5f}').format(x.sum(), *x)
 
 
-def execute(name, qtype, dataset, output, training_pref, ssd_settings,
+def execute(name, quantized, dataset, output, training_pref, ssd_settings,
             logger, trained_model_path=None, verbose=False):
 
     ssd_settings['n_classes'] += 1
-    quantized = (qtype == 'ternary')
     plot = Plotting(save_dir=output['plots'])
 
     # Initialize dataset
@@ -214,7 +189,7 @@ def execute(name, qtype, dataset, output, training_pref, ssd_settings,
 
             plot.draw_loss(train_loss.cpu().numpy(),
                            val_loss.cpu().numpy(),
-                           type=qtype)
+                           quantized=quantized)
 
             if cp_es(av_epoch_loss.sum(0), ssd_net):
                 break
@@ -229,17 +204,23 @@ def execute(name, qtype, dataset, output, training_pref, ssd_settings,
     h5v.close()
 
 
+def weights_init(m):
+    if isinstance(m, nn.Conv2d):
+        init.xavier_uniform_(m.weight.data)
+
+
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser('Train Single Shot Jet Detection Model')
     parser.add_argument('name', type=str, help='Model name')
-    parser.add_argument('qtype', type=str, choices={'full', 'ternary'},
-                        help='Type of quantization')
-    parser.add_argument('config', type=str, help="Path to config file")
-    parser.add_argument('-m', '--pre-trained', type=str,
-                        default=None, help='Path to pre-trained model',
-                        dest='trained_model_path')
-    parser.add_argument('-v', '--verbose', action="store_true",
+    parser.add_argument('config', type=str, action=IsValidFile,
+                        help='Path to config file')
+    parser.add_argument('-m', '--pre-trained-model', action=IsValidFile,
+                        default=None, dest='pre_trained_model_path', type=str,
+                        help='Path to pre-trained model')
+    parser.add_argument('-t', '--ternary', action='store_true',
+                        help='Ternarize weights')
+    parser.add_argument('-v', '--verbose', action='store_true',
                         help='Output verbosity')
     args = parser.parse_args()
     config = yaml.safe_load(open(args.config))
@@ -255,11 +236,11 @@ if __name__ == '__main__':
         torch.set_default_tensor_type('torch.FloatTensor')
 
     execute(args.name,
-            args.qtype,
+            args.ternary,
             config['dataset'],
             config['output'],
             config['training_pref'],
             config['ssd_settings'],
             logger=logger,
-            trained_model_path=args.trained_model_path,
+            trained_model_path=args.pre_trained_model_path,
             verbose=args.verbose)

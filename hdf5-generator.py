@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 import argparse
 import h5py
 import numpy as np
@@ -8,8 +6,8 @@ import simplejson as json
 import uproot
 import warnings
 
-from collections import Counter
 from uproot_methods import PtEtaPhiMassLorentzVector, TLorentzVector
+from utils import IsReadableDir
 from tqdm import tqdm
 
 
@@ -17,29 +15,24 @@ class PhysicsConstants():
 
     def __init__(self, example_file):
 
-        # Define quarks mass (not used), in GeV
-        self.q_mass = {'b': 4.2, 'h': 125.0, 'q': 0.1, 't': 173.1, 'W': 80.4}
-
         # Define jet constants
         self.classes = {'b': 0, 'h': 1, 'q': 3, 't': 2, 'W': 1}
-        self.min_pt = {'b': 21., 'h': 312., 'q': 1., 't': 433., 'W': 201}
         self.delta_r = .4
-
-        self.example_file = example_file
+        self.delphes = uproot.open(example_file)['Delphes']
         self.min_eta = -3
         self.max_eta = 3
-
-        self.delphes = uproot.open(example_file)['Delphes']
+        self.min_pt = {'b': 21., 'h': 312., 'q': 1., 't': 433., 'W': 201}
+        self.tower = self.delphes['Tower']
 
     def get_edges_ecal(self, edge_index, tower, sample_events=1000):
-        tower_flag_full_file = self.delphes['Tower'][tower].array()
-        edges_full_file = self.delphes['Tower']['Tower.Edges[4]'].array()
+        tower_mask_full_file = self.tower[tower].array()
+        edges_full_file = self.tower['Tower.Edges[4]'].array()
 
         global_edges = np.array([], dtype=np.float32)
 
         for i in range(sample_events):
 
-            edges_event = edges_full_file[i][tower_flag_full_file[i] > 0]
+            edges_event = edges_full_file[i][tower_mask_full_file[i] > 0]
             global_edges = np.append(global_edges,
                                      edges_event[:, edge_index])
             global_edges = np.append(global_edges,
@@ -55,11 +48,8 @@ class PhysicsConstants():
 
 class HDF5Generator:
 
-    def __init__(self,
-                 hdf5_dataset_path,
-                 hdf5_dataset_size,
-                 files_details,
-                 verbose):
+    def __init__(self, hdf5_dataset_path, hdf5_dataset_size, files_details,
+                 verbose=True):
 
         self.constants = PhysicsConstants(list(files_details[0])[0])
 
@@ -358,19 +348,6 @@ class Utils():
             gtotal = gtotal + event_max - event_min
 
         return files_details, batch_size, gtotal
-
-
-class IsReadableDir(argparse.Action):
-    def __call__(self, parser, namespace, values, option_string=None):
-        prospective_dir = values
-        if not os.path.isdir(prospective_dir):
-            raise argparse.ArgumentTypeError(
-                    '{0} is not a valid path'.format(prospective_dir))
-        if os.access(prospective_dir, os.R_OK):
-            setattr(namespace, self.dest, prospective_dir)
-        else:
-            raise argparse.ArgumentTypeError(
-                    '{0} is not a readable directory'.format(prospective_dir))
 
 
 if __name__ == '__main__':
