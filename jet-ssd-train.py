@@ -53,17 +53,17 @@ def execute(name, quantized, dataset, output, training_pref, ssd_settings,
     plot = Plotting(save_dir=output['plots'])
 
     # Initialize dataset
-    train_loader, h5t = get_data_loader(dataset['train'],
-                                        training_pref['batch_size'],
-                                        training_pref['workers'],
-                                        ssd_settings['input_dimensions'],
-                                        ssd_settings['object_size'])
-    val_loader, h5v = get_data_loader(dataset['validation'],
-                                      training_pref['batch_size'],
-                                      training_pref['workers'],
-                                      ssd_settings['input_dimensions'],
-                                      ssd_settings['object_size'],
-                                      shuffle=False)
+    train_loader = get_data_loader(dataset['train'],
+                                   training_pref['batch_size'],
+                                   training_pref['workers'],
+                                   ssd_settings['input_dimensions'],
+                                   ssd_settings['object_size'])
+    val_loader = get_data_loader(dataset['validation'],
+                                 training_pref['batch_size'],
+                                 training_pref['workers'],
+                                 ssd_settings['input_dimensions'],
+                                 ssd_settings['object_size'],
+                                 shuffle=False)
 
     # Build SSD network
     ssd_net = build_ssd(ssd_settings)
@@ -80,7 +80,7 @@ def execute(name, quantized, dataset, output, training_pref, ssd_settings,
 
     # Data parallelization
     cudnn.benchmark = True
-    net = torch.nn.DataParallel(ssd_net)
+    net = nn.DataParallel(ssd_net)
     net = net.cuda()
 
     # Set training objective parameters
@@ -199,9 +199,6 @@ def execute(name, quantized, dataset, output, training_pref, ssd_settings,
                     if isinstance(m, nn.Conv2d):
                         if m.in_channels > 2 and m.out_channels > 4:
                             m.weight.org.copy_(m.weight.data)
-
-    h5t.close()
-    h5v.close()
 
 
 def weights_init(m):

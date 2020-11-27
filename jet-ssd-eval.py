@@ -165,8 +165,8 @@ if __name__ == '__main__':
     plotting_results = []
     plotting_deltas = []
 
-    loader, h5 = get_data_loader(config['dataset']['test'], bs, workers,
-                                 in_dim, jet_size, return_pt=True)
+    loader = get_data_loader(config['dataset']['test'], bs, workers,
+                             in_dim, jet_size, return_pt=True, shuffle=False)
 
     for name in [args.fpn, args.twn]:
         base = '{}/{}'.format(config['output']['model'], name)
@@ -203,5 +203,3 @@ if __name__ == '__main__':
     plot = Plotting(save_dir=config['output']['plots'])
     plot.draw_precision_recall(plotting_results, jet_names)
     plot.draw_loc_delta(plotting_deltas, jet_names)
-
-    h5.close()
