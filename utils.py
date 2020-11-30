@@ -309,9 +309,10 @@ def collate_fn(batch):
 
 def get_data_loader(hdf5_source_path, batch_size, num_workers,
                     input_dimensions, jet_size,
-                    return_pt=False, shuffle=True):
+                    return_pt=False, qbits=None, shuffle=True):
     dataset = CalorimeterJetDataset(hdf5_source_path, input_dimensions,
-                                    jet_size, return_pt=return_pt)
+                                    jet_size, return_pt=return_pt,
+                                    qbits=qbits)
     return torch.utils.data.DataLoader(dataset,
                                        batch_size=batch_size,
                                        collate_fn=collate_fn,

@@ -165,10 +165,7 @@ if __name__ == '__main__':
     plotting_results = []
     plotting_deltas = []
 
-    loader = get_data_loader(config['dataset']['test'], bs, workers,
-                             in_dim, jet_size, return_pt=True, shuffle=False)
-
-    for name in [args.fpn, args.twn]:
+    for i, name in enumerate([args.fpn, args.twn]):
         base = '{}/{}'.format(config['output']['model'], name)
         source_path = '{}.pth'.format(base)
 
@@ -180,6 +177,10 @@ if __name__ == '__main__':
         net.eval()
         net = net.cuda()
         cudnn.benchmark = True
+        qbits = 8 if i else None
+        loader = get_data_loader(config['dataset']['test'], bs, workers,
+                                 in_dim, jet_size, return_pt=True,
+                                 qbits=qbits, shuffle=False)
 
         with torch.no_grad():
             it, res, delta = execute(net, loader, batch_size=bs,

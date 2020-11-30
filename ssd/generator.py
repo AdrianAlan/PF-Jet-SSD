@@ -13,17 +13,16 @@ class CalorimeterJetDataset(torch.utils.data.Dataset):
             self.hdf5_dataset.close()
 
     def __init__(self, hdf5_source_path, input_dimensions, jet_size,
-                 input_bits=8, return_pt=False):
+                 qbits=None, return_pt=False):
         """Generator for calorimeter and jet data"""
 
-        self.steps = pow(2, input_bits)
-        self.return_pt = return_pt
         self.source = hdf5_source_path
-
-        self.size = jet_size / 2
         self.channels = input_dimensions[0]  # Number of channels
         self.width = input_dimensions[1]  # Width of input
         self.height = input_dimensions[2]  # Height of input
+        self.size = jet_size / 2
+        self.qbits = qbits
+        self.return_pt = return_pt
 
     def __getitem__(self, index):
 
@@ -99,7 +98,11 @@ class CalorimeterJetDataset(torch.utils.data.Dataset):
         energy = energy / scaler
 
         i = torch.LongTensor([indices_channels, indices_eta, indices_phi])
-        v = qutils.uniform_quantization(torch.FloatTensor(energy), self.steps)
+        v = torch.FloatTensor(energy)
+
+        if self.qbits is not None:
+            v = qutils.uniform_quantization(v, self.qbits)
+
         pixels = torch.sparse.FloatTensor(i, v, torch.Size([self.channels,
                                                             self.width,
                                                             self.height]))

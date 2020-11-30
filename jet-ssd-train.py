@@ -49,6 +49,7 @@ def get_loss_info(x):
 def execute(name, quantized, dataset, output, training_pref, ssd_settings,
             logger, trained_model_path=None, verbose=False):
 
+    qbits = 8 if quantized else None
     ssd_settings['n_classes'] += 1
     plot = Plotting(save_dir=output['plots'])
 
@@ -57,12 +58,14 @@ def execute(name, quantized, dataset, output, training_pref, ssd_settings,
                                    training_pref['batch_size'],
                                    training_pref['workers'],
                                    ssd_settings['input_dimensions'],
-                                   ssd_settings['object_size'])
+                                   ssd_settings['object_size'],
+                                   qbits=qbits)
     val_loader = get_data_loader(dataset['validation'],
                                  training_pref['batch_size'],
                                  training_pref['workers'],
                                  ssd_settings['input_dimensions'],
                                  ssd_settings['object_size'],
+                                 qbits=qbits,
                                  shuffle=False)
 
     # Build SSD network
