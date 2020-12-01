@@ -75,33 +75,34 @@ def match(threshold, truths, priors, variance, labels, regres, loc_t, conf_t,
         The matched indices corresponding to location, confidence and
         regression predictions.
     """
-    # jaccard index
-    overlaps = jaccard(
-        truths,
-        point_form(priors)
-    )
+    overlaps = jaccard(truths, point_form(priors))
     # (Bipartite Matching)
-    # [1,num_objects] best prior for each ground truth
-    best_prior_overlap, best_prior_idx = overlaps.max(1, keepdim=True)
-    # [1,num_priors] best ground truth for each prior
-    best_truth_overlap, best_truth_idx = overlaps.max(0, keepdim=True)
-    best_truth_idx.squeeze_(0)
-    best_truth_overlap.squeeze_(0)
-    best_prior_idx.squeeze_(1)
-    best_prior_overlap.squeeze_(1)
-    best_truth_overlap.index_fill_(0, best_prior_idx, 2)  # ensure best prior
-    # TODO refactor: index  best_prior_idx with long tensor
-    # ensure every gt matches with its prior of max overlap
-    for j in range(best_prior_idx.size(0)):
-        best_truth_idx[best_prior_idx[j]] = j
-    matches = truths[best_truth_idx]          # Shape: [num_priors,4]
-    conf = labels[best_truth_idx] + 1         # Shape: [num_priors]
-    regr = regres[best_truth_idx]             # Shape: [num_priors, 2]
-    conf[best_truth_overlap < threshold] = 0  # label as background
-    loc = encode(matches, priors, variance)
-    loc_t[idx] = loc    # [num_priors,4] encoded offsets to learn
-    conf_t[idx] = conf  # [num_priors] top class label for each prior
-    regr_t[idx] = regr    # [num_priors,2] regression values
+    if overlaps.size(0):
+        # [1,num_objects] best prior for each ground truth
+        _, best_prior_idx = overlaps.max(1, keepdim=True)
+        # [1,num_priors] best ground truth for each prior
+        best_truth_overlap, best_truth_idx = overlaps.max(0, keepdim=True)
+        best_truth_idx.squeeze_(0)
+        best_truth_overlap.squeeze_(0)
+        best_prior_idx.squeeze_(1)
+
+        # ensure best prior
+        best_truth_overlap.index_fill_(0, best_prior_idx, 2)
+        # ensure every gt matches with its prior of max overlap
+        for j in range(best_prior_idx.size(0)):
+            best_truth_idx[best_prior_idx[j]] = j
+        matches = truths[best_truth_idx]          # Shape: [num_priors, 2]
+        conf = labels[best_truth_idx] + 1         # Shape: [num_priors]
+        regr = regres[best_truth_idx]             # Shape: [num_priors, 1]
+        conf[best_truth_overlap < threshold] = 0  # label as background
+        loc = encode(matches, priors, variance)
+        loc_t[idx] = loc    # [num_priors,4] encoded offsets to learn
+        conf_t[idx] = conf  # [num_priors] top class label for each prior
+        regr_t[idx] = regr    # [num_priors,2] regression values
+    else:
+        loc_t[idx] = 0
+        conf_t[idx] = 0  # label all as background
+        regr_t[idx] = 0  # set all the regression task to yield 0
 
 
 def encode(matched, priors, variance):

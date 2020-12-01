@@ -29,36 +29,26 @@ class CalorimeterJetDataset(torch.utils.data.Dataset):
         if not hasattr(self, 'hdf5_dataset'):
             self.open_hdf5()
 
-        # Repeat for events with no jets: Causes problems during training
-        repeat = True
+        # Load calorimeter
+        indices_ecal_phi = np.asarray(self.ecal_phi[index], dtype=np.int16)
+        indices_ecal_eta = np.asarray(self.ecal_eta[index], dtype=np.int16)
+        ecal_energy = np.asarray(self.ecal_energy[index], dtype=np.float32)
 
-        while repeat:
+        indices_hcal_phi = np.asarray(self.hcal_phi[index], dtype=np.int16)
+        indices_hcal_eta = np.asarray(self.hcal_eta[index], dtype=np.int16)
+        hcal_energy = np.asarray(self.hcal_energy[index], dtype=np.float32)
 
-            # Load calorimeter
-            indices_ecal_phi = np.asarray(self.ecal_phi[index], dtype=np.int16)
-            indices_ecal_eta = np.asarray(self.ecal_eta[index], dtype=np.int16)
-            ecal_energy = np.asarray(self.ecal_energy[index], dtype=np.float32)
+        calorimeter, scaler = self.process_images(indices_ecal_phi,
+                                                  indices_hcal_phi,
+                                                  indices_ecal_eta,
+                                                  indices_hcal_eta,
+                                                  ecal_energy,
+                                                  hcal_energy)
 
-            indices_hcal_phi = np.asarray(self.hcal_phi[index], dtype=np.int16)
-            indices_hcal_eta = np.asarray(self.hcal_eta[index], dtype=np.int16)
-            hcal_energy = np.asarray(self.hcal_energy[index], dtype=np.float32)
-
-            calorimeter, scaler = self.process_images(indices_ecal_phi,
-                                                      indices_hcal_phi,
-                                                      indices_ecal_eta,
-                                                      indices_hcal_eta,
-                                                      ecal_energy,
-                                                      hcal_energy)
-
-            # Set labels
-            labels_raw = np.asarray([self.labels[index]], dtype=np.float32)
-            labels_raw = torch.FloatTensor(labels_raw)
-            labels_processed = self.process_labels(labels_raw, scaler)
-
-            if labels_processed.shape[0]:
-                repeat = False
-            else:
-                index += 1
+        # Set labels
+        labels_raw = np.asarray([self.labels[index]], dtype=np.float32)
+        labels_raw = torch.FloatTensor(labels_raw)
+        labels_processed = self.process_labels(labels_raw, scaler)
 
         return calorimeter, labels_processed
 
