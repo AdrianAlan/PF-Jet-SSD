@@ -1,8 +1,4 @@
 import argparse
-import h5py
-import logging
-import numpy as np
-import pathlib
 import os
 import sys
 import torch
@@ -10,12 +6,10 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.backends.cudnn as cudnn
 import torch.nn.init as init
-import torch.utils.data as data
 import tqdm
 import yaml
 
 from tqdm import trange
-from torch.autograd import Variable
 
 from ssd.checkpoints import EarlyStopping
 from ssd.layers.modules import MultiBoxLoss
@@ -30,15 +24,6 @@ def adjust_learning_rate(optimizer, epoch, learning_rates):
         if step['epoch'] == epoch:
             for param_group in optimizer.param_groups:
                 param_group['lr'] = step['rate']
-
-
-def batch_step(x, y, optimizer, net, criterion):
-    x = Variable(x.cuda())
-    y = [Variable(ann.cuda()) for ann in y]
-    if optimizer:
-        optimizer.zero_grad()
-    output = net(x)
-    return criterion(output, y)
 
 
 def get_loss_info(x):
@@ -128,7 +113,9 @@ def execute(name, quantized, dataset, output, training_pref, ssd_settings,
                                                        m.weight.delta,
                                                        m.weight.alpha)
 
-            l, c, r = batch_step(images, targets, optimizer, net, criterion)
+            optimizer.zero_grad()
+            outputs = net(images)
+            l, c, r = criterion(outputs, targets)
             loss = l + c + r
             loss.backward()
 
@@ -177,7 +164,8 @@ def execute(name, quantized, dataset, output, training_pref, ssd_settings,
 
             for batch_index, (images, targets) in enumerate(val_loader):
 
-                l, c, r = batch_step(images, targets, None, net, criterion)
+                outputs = net(images)
+                l, c, r = criterion(outputs, targets)
                 all_epoch_loss += torch.tensor([l.item(), c.item(), r.item()])
                 av_epoch_loss = all_epoch_loss / (batch_index + 1)
                 info = 'Validation, {}'.format(get_loss_info(av_epoch_loss))
@@ -230,10 +218,9 @@ if __name__ == '__main__':
                                             args.name),
                          args.verbose)
 
-    if torch.cuda.is_available():
-        torch.set_default_tensor_type('torch.cuda.FloatTensor')
-    else:
-        torch.set_default_tensor_type('torch.FloatTensor')
+    if not torch.cuda.is_available():
+        pass
+    torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
     execute(args.name,
             args.ternary,

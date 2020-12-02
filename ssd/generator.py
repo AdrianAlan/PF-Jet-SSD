@@ -1,5 +1,4 @@
 import h5py
-import numpy as np
 import torch
 
 from ssd import qutils
@@ -30,13 +29,13 @@ class CalorimeterJetDataset(torch.utils.data.Dataset):
             self.open_hdf5()
 
         # Load calorimeter
-        indices_ecal_phi = np.asarray(self.ecal_phi[index], dtype=np.int16)
-        indices_ecal_eta = np.asarray(self.ecal_eta[index], dtype=np.int16)
-        ecal_energy = np.asarray(self.ecal_energy[index], dtype=np.float32)
+        indices_ecal_phi = torch.cuda.LongTensor([self.ecal_phi[index]])
+        indices_ecal_eta = torch.cuda.LongTensor([self.ecal_eta[index]])
+        ecal_energy = torch.cuda.FloatTensor(self.ecal_energy[index])
 
-        indices_hcal_phi = np.asarray(self.hcal_phi[index], dtype=np.int16)
-        indices_hcal_eta = np.asarray(self.hcal_eta[index], dtype=np.int16)
-        hcal_energy = np.asarray(self.hcal_energy[index], dtype=np.float32)
+        indices_hcal_phi = torch.cuda.LongTensor([self.hcal_phi[index]])
+        indices_hcal_eta = torch.cuda.LongTensor([self.hcal_eta[index]])
+        hcal_energy = torch.cuda.FloatTensor(self.hcal_energy[index])
 
         calorimeter, scaler = self.process_images(indices_ecal_phi,
                                                   indices_hcal_phi,
@@ -46,8 +45,7 @@ class CalorimeterJetDataset(torch.utils.data.Dataset):
                                                   hcal_energy)
 
         # Set labels
-        labels_raw = np.asarray([self.labels[index]], dtype=np.float32)
-        labels_raw = torch.FloatTensor(labels_raw)
+        labels_raw = torch.cuda.FloatTensor(self.labels[index])
         labels_processed = self.process_labels(labels_raw, scaler)
 
         return calorimeter, labels_processed
@@ -79,16 +77,16 @@ class CalorimeterJetDataset(torch.utils.data.Dataset):
                        indices_ecal_eta, indices_hcal_eta,
                        ecal_energy, hcal_energy):
 
-        indices_channels = np.append(np.zeros(len(indices_ecal_phi)),
-                                     np.ones(len(indices_hcal_phi)))
-        indices_phi = np.append(indices_ecal_phi, indices_hcal_phi)
-        indices_eta = np.append(indices_ecal_eta, indices_hcal_eta)
-        energy = np.append(ecal_energy, hcal_energy)
-        scaler = np.max(energy)
-        energy = energy / scaler
+        indices_channels = torch.unsqueeze(torch.cat(
+            (torch.zeros(indices_ecal_phi.size(1), dtype=torch.long),
+             torch.ones(indices_hcal_phi.size(1), dtype=torch.long))), 0)
+        indices_phi = torch.cat((indices_ecal_phi, indices_hcal_phi), 1)
+        indices_eta = torch.cat((indices_ecal_eta, indices_hcal_eta), 1)
+        energy = torch.cat((ecal_energy, hcal_energy))
+        scaler = torch.max(energy)
 
-        i = torch.LongTensor([indices_channels, indices_eta, indices_phi])
-        v = torch.FloatTensor(energy)
+        i = torch.cat((indices_channels, indices_eta, indices_phi), 0)
+        v = energy / scaler
 
         if self.qbits is not None:
             v = qutils.uniform_quantization(v, self.qbits)
@@ -100,7 +98,7 @@ class CalorimeterJetDataset(torch.utils.data.Dataset):
 
     def process_labels(self, labels_raw, scaler_mass):
         labels_reshaped = labels_raw.reshape(-1, 5)
-        labels = torch.empty_like(labels_reshaped, dtype=torch.float32)
+        labels = torch.empty_like(labels_reshaped)
 
         # Set fractional coordinates
         labels[:, 0] = (labels_reshaped[:, 1] - self.size) / float(self.width)

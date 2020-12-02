@@ -1,10 +1,7 @@
 import argparse
-import h5py
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.backends.cudnn as cudnn
-import sys
 import yaml
 
 from sklearn.metrics import average_precision_score, precision_recall_curve
@@ -28,12 +25,12 @@ def execute(model, dataset, im_size, conf_threshold=0., batch_size=50,
     for X, y in dataset:
 
         t_start = timer()
-        pred = model(X.cuda()).data
+        pred = model(X).data
         t_end = timer()
         inf_time = torch.cat((inf_time, torch.Tensor([t_end-t_start])))
 
         for idx in range(batch_size):
-            detections, targets = pred[idx].cuda(), y[idx].cuda()
+            detections, targets = pred[idx], y[idx]
             targets[:, [0, 2]] *= im_size[0]
             targets[:, [1, 3]] *= im_size[1]
             all_detections = torch.empty((0, 8))
@@ -144,10 +141,9 @@ if __name__ == '__main__':
     args = parser.parse_args()
     config = yaml.safe_load(open(args.config))
 
-    if torch.cuda.is_available():
-        torch.set_default_tensor_type('torch.cuda.FloatTensor')
-    else:
-        torch.set_default_tensor_type('torch.FloatTensor')
+    if not torch.cuda.is_available():
+        pass
+    torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
     evaluation_pref = config['evaluation_pref']
     ssd_settings = config['ssd_settings']
@@ -174,9 +170,9 @@ if __name__ == '__main__':
 
         net = build_ssd(ssd_settings, inference=True)
         net.load_weights(source_path)
-        net.eval()
-        net = net.cuda()
         cudnn.benchmark = True
+        net = net.cuda()
+        net.eval()
         qbits = 8 if i else None
         loader = get_data_loader(config['dataset']['test'], bs, workers,
                                  in_dim, jet_size, return_pt=True,
