@@ -10,17 +10,6 @@ output:
 
 training_pref:
  batch_size: 25
- learning_rates:
-  - rate: .001
-    epoch: 1
-  - rate: .0005
-    epoch: 20
-  - rate: .0001
-    epoch: 30
-  - rate: .00005
-    epoch: 40
-  - rate: .00001
-    epoch: 45
  max_epochs: 50
  momentum: .9
  patience: 20

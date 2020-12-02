@@ -19,13 +19,6 @@ from ssd.qutils import get_delta, get_alpha, to_ternary
 from utils import IsValidFile, Plotting, get_data_loader, set_logging
 
 
-def adjust_learning_rate(optimizer, epoch, learning_rates):
-    for step in learning_rates:
-        if step['epoch'] == epoch:
-            for param_group in optimizer.param_groups:
-                param_group['lr'] = step['rate']
-
-
 def get_loss_info(x):
     return ('Total loss {:.5f}, Localization {:.5f} ' +
             'Classification {:.5f} Regresion {:.5f}').format(x.sum(), *x)
@@ -75,6 +68,9 @@ def execute(name, quantized, dataset, output, training_pref, ssd_settings,
     optimizer = optim.SGD(net.parameters(), lr=1e-3,
                           momentum=training_pref['momentum'],
                           weight_decay=training_pref['weight_decay'])
+    scheduler = optim.lr_scheduler.MultiStepLR(optimizer,
+                                               milestones=[20, 30, 40, 45],
+                                               gamma=0.5)
     cp_es = EarlyStopping(patience=training_pref['patience'],
                           save_path='%s/%s.pth' % (output['model'], name))
     criterion = MultiBoxLoss(ssd_settings['n_classes'],
@@ -83,8 +79,6 @@ def execute(name, quantized, dataset, output, training_pref, ssd_settings,
     train_loss, val_loss = torch.empty(3, 0), torch.empty(3, 0)
 
     for epoch in range(1, training_pref['max_epochs']+1):
-
-        adjust_learning_rate(optimizer, epoch, training_pref['learning_rates'])
 
         # Start model training
         if verbose:
@@ -190,6 +184,7 @@ def execute(name, quantized, dataset, output, training_pref, ssd_settings,
                     if isinstance(m, nn.Conv2d):
                         if m.in_channels > 2 and m.out_channels > 4:
                             m.weight.org.copy_(m.weight.data)
+        scheduler.step()
 
 
 def weights_init(m):
