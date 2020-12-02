@@ -11,6 +11,7 @@ import yaml
 
 from tqdm import trange
 
+from torch.cuda.amp import GradScaler, autocast
 from ssd.checkpoints import EarlyStopping
 from ssd.layers.modules import MultiBoxLoss
 from ssd.generator import CalorimeterJetDataset
@@ -75,6 +76,7 @@ def execute(name, quantized, dataset, output, training_pref, ssd_settings,
                           save_path='%s/%s.pth' % (output['model'], name))
     criterion = MultiBoxLoss(ssd_settings['n_classes'],
                              min_overlap=ssd_settings['overlap_threshold'])
+    scaler = GradScaler()
 
     train_loss, val_loss = torch.empty(3, 0), torch.empty(3, 0)
 
@@ -107,11 +109,11 @@ def execute(name, quantized, dataset, output, training_pref, ssd_settings,
                                                        m.weight.delta,
                                                        m.weight.alpha)
 
-            optimizer.zero_grad()
-            outputs = net(images)
-            l, c, r = criterion(outputs, targets)
-            loss = l + c + r
-            loss.backward()
+            with autocast():
+                outputs = net(images)
+                l, c, r = criterion(outputs, targets)
+                loss = l + c + r
+            scaler.scale(loss).backward()
 
             if quantized:
                 for m in net.modules():
@@ -119,7 +121,9 @@ def execute(name, quantized, dataset, output, training_pref, ssd_settings,
                         if m.in_channels > 2 and m.out_channels > 4:
                             m.weight.data.copy_(m.weight.org)
 
-            optimizer.step()
+            scaler.step(optimizer)
+            scaler.update()
+            optimizer.zero_grad()
 
             if quantized:
                 for m in net.modules():

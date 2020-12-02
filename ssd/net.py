@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from torch.cuda.amp import autocast
 from operator import itemgetter
 from ssd.layers import *
 from torch.autograd import Variable
@@ -39,6 +40,7 @@ class SSD(nn.Module):
 
         self.priors = Variable(self.priorbox.apply(config))
 
+    @autocast()
     def forward(self, x):
         """Applies network layers and ops on input images x"""
 
