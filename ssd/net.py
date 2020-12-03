@@ -1,10 +1,8 @@
 import os
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from torch.cuda.amp import autocast
-from operator import itemgetter
 from ssd.layers import *
 from ssd.qutils import uniform_quantization
 from torch.autograd import Variable
