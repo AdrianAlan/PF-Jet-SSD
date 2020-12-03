@@ -6,6 +6,7 @@ import torch.nn.functional as F
 from torch.cuda.amp import autocast
 from operator import itemgetter
 from ssd.layers import *
+from ssd.qutils import uniform_quantization
 from torch.autograd import Variable
 
 
@@ -93,12 +94,12 @@ class SSD(nn.Module):
                     if isinstance(m, nn.Conv2d):
                         if m.in_channels == 2:
                             tmp = m.weight.data.clone()
-                            m.weight.data.copy_(tmp.half())
+                            m.weight.data.copy_(uniform_quantization(tmp, 8))
             for o in [self.loc, self.cnf, self.reg]:
                 for m in o.modules():
                     if isinstance(m, nn.Conv2d):
                         tmp = m.weight.data.clone()
-                        m.weight.data.copy_(tmp.half())
+                        m.weight.data.copy_(uniform_quantization(tmp, 8))
             return True
         return False
 
