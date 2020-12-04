@@ -8,9 +8,12 @@ import torch.backends.cudnn as cudnn
 import torch.nn.init as init
 import tqdm
 import yaml
-
+import torch.distributed as dist
+import torch.multiprocessing as mp
 from tqdm import trange
 
+from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.distributed.optim import DistributedOptimizer
 from torch.cuda.amp import GradScaler, autocast
 from ssd.checkpoints import EarlyStopping
 from ssd.layers.modules import MultiBoxLoss
@@ -25,8 +28,10 @@ def get_loss_info(x):
             'Classification {:.5f} Regresion {:.5f}').format(x.sum(), *x)
 
 
-def execute(name, quantized, dataset, output, training_pref, ssd_settings,
-            logger, trained_model_path=None, verbose=False):
+def execute(rank, world_size, name, quantized, dataset, output, training_pref,
+            ssd_settings, logger, trained_model_path, verbose):
+
+    setup(rank, world_size)
 
     qbits = 8 if quantized else None
     ssd_settings['n_classes'] += 1
@@ -38,17 +43,18 @@ def execute(name, quantized, dataset, output, training_pref, ssd_settings,
                                    training_pref['workers'],
                                    ssd_settings['input_dimensions'],
                                    ssd_settings['object_size'],
+                                   distributed=True,
                                    qbits=qbits)
     val_loader = get_data_loader(dataset['validation'],
                                  training_pref['batch_size'],
                                  training_pref['workers'],
                                  ssd_settings['input_dimensions'],
                                  ssd_settings['object_size'],
-                                 qbits=qbits,
-                                 shuffle=False)
+                                 distributed=True,
+                                 qbits=qbits)
 
     # Build SSD network
-    ssd_net = build_ssd(ssd_settings)
+    ssd_net = build_ssd(ssd_settings).to(rank)
     logger.debug('SSD architecture:\n{}'.format(str(ssd_net)))
 
     # Initialize weights
@@ -62,7 +68,7 @@ def execute(name, quantized, dataset, output, training_pref, ssd_settings,
 
     # Data parallelization
     cudnn.benchmark = True
-    net = nn.DataParallel(ssd_net)
+    net = DDP(ssd_net, device_ids=[rank])
     net = net.cuda()
 
     # Set training objective parameters
@@ -189,11 +195,22 @@ def execute(name, quantized, dataset, output, training_pref, ssd_settings,
                         if m.in_channels > 2 and m.out_channels > 4:
                             m.weight.org.copy_(m.weight.data)
         scheduler.step()
+    cleanup()
 
 
 def weights_init(m):
     if isinstance(m, nn.Conv2d):
         init.xavier_uniform_(m.weight.data)
+
+
+def setup(rank, world_size):
+    os.environ['MASTER_ADDR'] = '127.0.0.1'
+    os.environ['MASTER_PORT'] = '11223'
+    dist.init_process_group("gloo", rank=rank, world_size=world_size)
+
+
+def cleanup():
+    dist.destroy_process_group()
 
 
 if __name__ == '__main__':
@@ -221,12 +238,17 @@ if __name__ == '__main__':
         pass
     torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
-    execute(args.name,
-            args.ternary,
-            config['dataset'],
-            config['output'],
-            config['training_pref'],
-            config['ssd_settings'],
-            logger=logger,
-            trained_model_path=args.pre_trained_model_path,
-            verbose=args.verbose)
+    world_size = 1
+    mp.spawn(execute,
+             args=(world_size,
+                   args.name,
+                   args.ternary,
+                   config['dataset'],
+                   config['output'],
+                   config['training_pref'],
+                   config['ssd_settings'],
+                   logger,
+                   args.pre_trained_model_path,
+                   args.verbose),
+             nprocs=world_size,
+             join=True)

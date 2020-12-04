@@ -34,6 +34,6 @@ class PriorBox(Function):
 
                 mean += [cx, cy, s_k_max_x, s_k_max_y]
 
-        output = torch.Tensor(mean).view(-1, 4)
+        output = torch.cuda.FloatTensor(mean).view(-1, 4)
 
         return output

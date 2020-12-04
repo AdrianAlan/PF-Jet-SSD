@@ -79,7 +79,7 @@ class CalorimeterJetDataset(torch.utils.data.Dataset):
 
         indices_channels = torch.unsqueeze(torch.cat(
             (torch.zeros(indices_ecal_phi.size(1), dtype=torch.long),
-             torch.ones(indices_hcal_phi.size(1), dtype=torch.long))), 0)
+             torch.ones(indices_hcal_phi.size(1), dtype=torch.long))), 0).cuda()
         indices_phi = torch.cat((indices_ecal_phi, indices_hcal_phi), 1)
         indices_eta = torch.cat((indices_ecal_eta, indices_hcal_eta), 1)
         energy = torch.cat((ecal_energy, hcal_energy))
