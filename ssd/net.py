@@ -10,7 +10,7 @@ from torch.autograd import Variable
 
 class SSD(nn.Module):
 
-    def __init__(self, base, head, ssd_settings, inference):
+    def __init__(self, base, head, ssd_settings, inference, rank):
         super(SSD, self).__init__()
 
         self.inference = inference
@@ -37,7 +37,7 @@ class SSD(nn.Module):
         else:
             self.l2norm_2 = L2Norm(1024, 20)
 
-        self.priors = Variable(self.priorbox.apply(config))
+        self.priors = Variable(self.priorbox.apply(config, rank))
 
     @autocast()
     def forward(self, x):
@@ -150,11 +150,11 @@ def multibox(n_classes, inference):
     return (loc, cnf, reg)
 
 
-def build_ssd(ssd_settings, inference=False):
+def build_ssd(rank, ssd_settings, inference=False):
 
     input_dimensions = ssd_settings['input_dimensions']
 
     base = vgg(input_dimensions[0], inference)
     head = multibox(ssd_settings['n_classes'], inference)
 
-    return SSD(base, head, ssd_settings, inference)
+    return SSD(base, head, ssd_settings, inference, rank)

@@ -45,6 +45,7 @@ def execute(rank, world_size, name, quantized, dataset, output, training_pref,
                                    ssd_settings['object_size'],
                                    distributed=True,
                                    qbits=qbits)
+
     val_loader = get_data_loader(dataset['validation'],
                                  training_pref['batch_size'],
                                  training_pref['workers'],
@@ -54,7 +55,7 @@ def execute(rank, world_size, name, quantized, dataset, output, training_pref,
                                  qbits=qbits)
 
     # Build SSD network
-    ssd_net = build_ssd(ssd_settings).to(rank)
+    ssd_net = build_ssd(rank, ssd_settings).to(rank)
     logger.debug('SSD architecture:\n{}'.format(str(ssd_net)))
 
     # Initialize weights
@@ -69,7 +70,6 @@ def execute(rank, world_size, name, quantized, dataset, output, training_pref,
     # Data parallelization
     cudnn.benchmark = True
     net = DDP(ssd_net, device_ids=[rank])
-    net = net.cuda()
 
     # Set training objective parameters
     optimizer = optim.SGD(net.parameters(), lr=1e-3,
@@ -78,12 +78,13 @@ def execute(rank, world_size, name, quantized, dataset, output, training_pref,
     scheduler = optim.lr_scheduler.MultiStepLR(optimizer,
                                                milestones=[20, 30, 40, 45],
                                                gamma=0.5)
-    cp_es = EarlyStopping(patience=training_pref['patience'],
-                          save_path='%s/%s.pth' % (output['model'], name))
-    criterion = MultiBoxLoss(ssd_settings['n_classes'],
+    if rank == 0:
+        cp_es = EarlyStopping(patience=training_pref['patience'],
+                              save_path='%s/%s.pth' % (output['model'], name))
+    criterion = MultiBoxLoss(rank, ssd_settings['n_classes'],
                              min_overlap=ssd_settings['overlap_threshold'])
     scaler = GradScaler()
-
+    verobse = verbose and rank == 0
     train_loss, val_loss = torch.empty(3, 0), torch.empty(3, 0)
 
     for epoch in range(1, training_pref['max_epochs']+1):
@@ -104,6 +105,8 @@ def execute(rank, world_size, name, quantized, dataset, output, training_pref,
                         m.weight.alpha = get_alpha(m.weight.data, delta)
 
         for batch_index, (images, targets) in enumerate(train_loader):
+            images = images.to(rank)
+            targets = [t.to(rank) for t in targets]
 
             # Ternarize weights
             if quantized:
@@ -167,9 +170,12 @@ def execute(rank, world_size, name, quantized, dataset, output, training_pref,
                             m.weight.data = to_ternary(m.weight.data)
 
             for batch_index, (images, targets) in enumerate(val_loader):
+                images = images.to(rank)
+                targets = [t.to(rank) for t in targets]
 
                 outputs = net(images)
                 l, c, r = criterion(outputs, targets)
+                ll, lc, lr = reduce_tensor(l.data, c.data, r.data)
                 all_epoch_loss += torch.tensor([l.item(), c.item(), r.item()])
                 av_epoch_loss = all_epoch_loss / (batch_index + 1)
                 info = 'Validation, {}'.format(get_loss_info(av_epoch_loss))
@@ -186,8 +192,10 @@ def execute(rank, world_size, name, quantized, dataset, output, training_pref,
                            val_loss.cpu().numpy(),
                            quantized=quantized)
 
-            if cp_es(av_epoch_loss.sum(0), ssd_net):
+            if rank == 0 and cp_es(av_epoch_loss.sum(0), ssd_net):
                 break
+
+            dist.barrier()
 
             if quantized:
                 for m in net.modules():
@@ -196,6 +204,16 @@ def execute(rank, world_size, name, quantized, dataset, output, training_pref,
                             m.weight.org.copy_(m.weight.data)
         scheduler.step()
     cleanup()
+
+def reduce_tensor(l, c, r):
+    ll, lc, lr = l.clone(), c.clone(), r.clone()
+    dist.all_reduce(ll)
+    dist.all_reduce(lc)
+    dist.all_reduce(lr)
+    ll /= int(os.environ['WORLD_SIZE'])
+    lc /= int(os.environ['WORLD_SIZE'])
+    lr /= int(os.environ['WORLD_SIZE'])
+    return ll, lc, lr
 
 
 def weights_init(m):
@@ -206,6 +224,7 @@ def weights_init(m):
 def setup(rank, world_size):
     os.environ['MASTER_ADDR'] = '127.0.0.1'
     os.environ['MASTER_PORT'] = '11223'
+    os.environ['WORLD_SIZE'] = str(world_size)
     dist.init_process_group("gloo", rank=rank, world_size=world_size)
 
 
@@ -238,7 +257,8 @@ if __name__ == '__main__':
         pass
     torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
-    world_size = 1
+    world_size = torch.cuda.device_count()
+
     mp.spawn(execute,
              args=(world_size,
                    args.name,

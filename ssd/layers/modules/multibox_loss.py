@@ -16,13 +16,13 @@ class MultiBoxLoss(nn.Module):
     a large number of default bounding boxes. https://arxiv.org/pdf/1512.02325
     """
 
-    def __init__(self, n_classes, min_overlap=0.5, neg_pos=3, use_gpu=True):
+    def __init__(self, rank, n_classes, min_overlap=0.5, neg_pos=3):
         super(MultiBoxLoss, self).__init__()
 
+        self.rank = rank
         self.n_classes = n_classes
         self.threshold = min_overlap
         self.negpos_ratio = neg_pos
-        self.use_gpu = use_gpu
         self.variance = .1
 
     def forward(self, predictions, targets):
@@ -59,10 +59,9 @@ class MultiBoxLoss(nn.Module):
             regres = targets[idx][:, -1:].data  # truth auxiliary regression
             match(self.threshold, coords, defaults, self.variance, labels,
                   regres, loc_t, conf_t, regr_t, idx)
-        if self.use_gpu:
-            loc_t = loc_t.cuda()
-            conf_t = conf_t.cuda()
-            regr_t = regr_t.cuda()
+        loc_t = loc_t.cuda(self.rank)
+        conf_t = conf_t.cuda(self.rank)
+        regr_t = regr_t.cuda(self.rank)
         loc_t = Variable(loc_t, requires_grad=False)
         conf_t = Variable(conf_t, requires_grad=False)
         regr_t = Variable(regr_t, requires_grad=False)
