@@ -1,7 +1,13 @@
 ---
 dataset:
- train: /path/to/train
- validation: /path/to/validation
+ train:
+  - /path/to/train0
+  - /path/to/train1
+  - /path/to/train2
+ validation:
+  - /path/to/validation0
+  - /path/to/validation1
+  - /path/to/validation2
  test: /path/to/test
 
 output:
@@ -9,7 +15,8 @@ output:
  plots: ./plots
 
 training_pref:
- batch_size: 25
+ batch_size_train: 25
+ batch_size_validation: 100
  max_epochs: 50
  momentum: .9
  patience: 20

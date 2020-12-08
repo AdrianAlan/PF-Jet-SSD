@@ -38,20 +38,22 @@ def execute(rank, world_size, name, quantized, dataset, output, training_pref,
     plot = Plotting(save_dir=output['plots'])
 
     # Initialize dataset
-    train_loader = get_data_loader(dataset['train'],
-                                   training_pref['batch_size'],
+    train_loader = get_data_loader(dataset['train'][rank],
+                                   training_pref['batch_size_train'],
                                    training_pref['workers'],
                                    ssd_settings['input_dimensions'],
                                    ssd_settings['object_size'],
-                                   distributed=True,
+                                   rank,
+                                   shuffle=True,
                                    qbits=qbits)
 
-    val_loader = get_data_loader(dataset['validation'],
-                                 training_pref['batch_size'],
+    val_loader = get_data_loader(dataset['validation'][rank],
+                                 training_pref['batch_size_validation'],
                                  training_pref['workers'],
                                  ssd_settings['input_dimensions'],
                                  ssd_settings['object_size'],
-                                 distributed=True,
+                                 rank,
+                                 shuffle=False,
                                  qbits=qbits)
 
     # Build SSD network
@@ -105,8 +107,6 @@ def execute(rank, world_size, name, quantized, dataset, output, training_pref,
                         m.weight.alpha = get_alpha(m.weight.data, delta)
 
         for batch_index, (images, targets) in enumerate(train_loader):
-            images = images.to(rank)
-            targets = [t.to(rank) for t in targets]
 
             # Ternarize weights
             if quantized:
@@ -170,12 +170,9 @@ def execute(rank, world_size, name, quantized, dataset, output, training_pref,
                             m.weight.data = to_ternary(m.weight.data)
 
             for batch_index, (images, targets) in enumerate(val_loader):
-                images = images.to(rank)
-                targets = [t.to(rank) for t in targets]
-
                 outputs = net(images)
                 l, c, r = criterion(outputs, targets)
-                ll, lc, lr = reduce_tensor(l.data, c.data, r.data)
+                l, c, r = reduce_tensor(l.data, c.data, r.data)
                 all_epoch_loss += torch.tensor([l.item(), c.item(), r.item()])
                 av_epoch_loss = all_epoch_loss / (batch_index + 1)
                 info = 'Validation, {}'.format(get_loss_info(av_epoch_loss))
@@ -205,15 +202,16 @@ def execute(rank, world_size, name, quantized, dataset, output, training_pref,
         scheduler.step()
     cleanup()
 
-def reduce_tensor(l, c, r):
-    ll, lc, lr = l.clone(), c.clone(), r.clone()
-    dist.all_reduce(ll)
-    dist.all_reduce(lc)
-    dist.all_reduce(lr)
-    ll /= int(os.environ['WORLD_SIZE'])
-    lc /= int(os.environ['WORLD_SIZE'])
-    lr /= int(os.environ['WORLD_SIZE'])
-    return ll, lc, lr
+
+def reduce_tensor(loc, cls, reg):
+    l, c, r = loc.clone(), cls.clone(), reg.clone()
+    dist.all_reduce(l)
+    dist.all_reduce(c)
+    dist.all_reduce(r)
+    l /= int(os.environ['WORLD_SIZE'])
+    c /= int(os.environ['WORLD_SIZE'])
+    r /= int(os.environ['WORLD_SIZE'])
+    return l, c, r
 
 
 def weights_init(m):

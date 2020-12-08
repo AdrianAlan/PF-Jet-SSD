@@ -11,10 +11,11 @@ class CalorimeterJetDataset(torch.utils.data.Dataset):
         if hasattr(self, 'hdf5_dataset'):
             self.hdf5_dataset.close()
 
-    def __init__(self, hdf5_source_path, input_dimensions, jet_size,
+    def __init__(self, rank, hdf5_source_path, input_dimensions, jet_size,
                  qbits=None, return_pt=False):
         """Generator for calorimeter and jet data"""
 
+        self.rank = rank
         self.source = hdf5_source_path
         self.channels = input_dimensions[0]  # Number of channels
         self.width = input_dimensions[1]  # Width of input
@@ -29,13 +30,19 @@ class CalorimeterJetDataset(torch.utils.data.Dataset):
             self.open_hdf5()
 
         # Load calorimeter
-        indices_ecal_phi = torch.cuda.LongTensor([self.ecal_phi[index]])
-        indices_ecal_eta = torch.cuda.LongTensor([self.ecal_eta[index]])
-        ecal_energy = torch.cuda.FloatTensor(self.ecal_energy[index])
+        indices_ecal_phi = torch.cuda.LongTensor([self.ecal_phi[index]],
+                                                 device=self.rank)
+        indices_ecal_eta = torch.cuda.LongTensor([self.ecal_eta[index]],
+                                                 device=self.rank)
+        ecal_energy = torch.cuda.FloatTensor(self.ecal_energy[index],
+                                             device=self.rank)
 
-        indices_hcal_phi = torch.cuda.LongTensor([self.hcal_phi[index]])
-        indices_hcal_eta = torch.cuda.LongTensor([self.hcal_eta[index]])
-        hcal_energy = torch.cuda.FloatTensor(self.hcal_energy[index])
+        indices_hcal_phi = torch.cuda.LongTensor([self.hcal_phi[index]],
+                                                 device=self.rank)
+        indices_hcal_eta = torch.cuda.LongTensor([self.hcal_eta[index]],
+                                                 device=self.rank)
+        hcal_energy = torch.cuda.FloatTensor(self.hcal_energy[index],
+                                             device=self.rank)
 
         calorimeter, scaler = self.process_images(indices_ecal_phi,
                                                   indices_hcal_phi,
@@ -45,7 +52,8 @@ class CalorimeterJetDataset(torch.utils.data.Dataset):
                                                   hcal_energy)
 
         # Set labels
-        labels_raw = torch.cuda.FloatTensor(self.labels[index])
+        labels_raw = torch.cuda.FloatTensor(self.labels[index],
+                                            device=self.rank)
         labels_processed = self.process_labels(labels_raw, scaler)
 
         return calorimeter, labels_processed
@@ -77,9 +85,11 @@ class CalorimeterJetDataset(torch.utils.data.Dataset):
                        indices_ecal_eta, indices_hcal_eta,
                        ecal_energy, hcal_energy):
 
-        indices_channels = torch.unsqueeze(torch.cat(
-            (torch.zeros(indices_ecal_phi.size(1), dtype=torch.long),
-             torch.ones(indices_hcal_phi.size(1), dtype=torch.long))), 0).cuda()
+        c_ecal = torch.zeros(indices_ecal_phi.size(1),
+                             dtype=torch.long).cuda(self.rank)
+        c_hcal = torch.ones(indices_hcal_phi.size(1),
+                            dtype=torch.long).cuda(self.rank)
+        indices_channels = torch.unsqueeze(torch.cat((c_ecal, c_hcal)), 0)
         indices_phi = torch.cat((indices_ecal_phi, indices_hcal_phi), 1)
         indices_eta = torch.cat((indices_ecal_eta, indices_hcal_eta), 1)
         energy = torch.cat((ecal_energy, hcal_energy))
