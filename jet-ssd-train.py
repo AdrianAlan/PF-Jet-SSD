@@ -29,9 +29,13 @@ def get_loss_info(x):
 
 
 def execute(rank, world_size, name, quantized, dataset, output, training_pref,
-            ssd_settings, logger, trained_model_path, verbose):
+            ssd_settings, trained_model_path, verbose):
 
     setup(rank, world_size)
+
+    if rank == 0:
+        logname = '{}/{}.log'.format(output['model'], name)
+        logger = set_logging('Train_SSD', logname, verbose)
 
     qbits = 8 if quantized else None
     ssd_settings['n_classes'] += 1
@@ -58,7 +62,8 @@ def execute(rank, world_size, name, quantized, dataset, output, training_pref,
 
     # Build SSD network
     ssd_net = build_ssd(rank, ssd_settings).to(rank)
-    logger.debug('SSD architecture:\n{}'.format(str(ssd_net)))
+    if rank == 0:
+        logger.debug('SSD architecture:\n{}'.format(str(ssd_net)))
 
     # Initialize weights
     if trained_model_path:
@@ -148,7 +153,8 @@ def execute(rank, world_size, name, quantized, dataset, output, training_pref,
                 tr.set_description(info)
                 tr.update(1)
 
-        logger.debug(info)
+        if rank == 0:
+            logger.debug(info)
         train_loss = torch.cat((train_loss, av_epoch_loss.unsqueeze(1)), 1)
         if verbose:
             tr.close()
@@ -180,7 +186,8 @@ def execute(rank, world_size, name, quantized, dataset, output, training_pref,
                     tr.set_description(info)
                     tr.update(1)
 
-            logger.debug(info)
+            if rank == 0:
+                logger.debug(info)
             val_loss = torch.cat((val_loss, av_epoch_loss.unsqueeze(1)), 1)
             if verbose:
                 tr.close()
@@ -246,11 +253,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
     config = yaml.safe_load(open(args.config))
 
-    logger = set_logging('Train_SSD',
-                         '{}/{}.log'.format(config['output']['model'],
-                                            args.name),
-                         args.verbose)
-
     if not torch.cuda.is_available():
         pass
     torch.set_default_tensor_type('torch.cuda.FloatTensor')
@@ -265,7 +267,6 @@ if __name__ == '__main__':
                    config['output'],
                    config['training_pref'],
                    config['ssd_settings'],
-                   logger,
                    args.pre_trained_model_path,
                    args.verbose),
              nprocs=world_size,
