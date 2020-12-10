@@ -93,7 +93,7 @@ class CalorimeterJetDataset(torch.utils.data.Dataset):
         indices_phi = torch.cat((indices_ecal_phi, indices_hcal_phi), 1)
         indices_eta = torch.cat((indices_ecal_eta, indices_hcal_eta), 1)
         energy = torch.cat((ecal_energy, hcal_energy))
-        scaler = torch.max(energy)
+        scaler = torch.max(energy) / 10
 
         i = torch.cat((indices_channels, indices_eta, indices_phi), 0)
         v = energy / scaler
