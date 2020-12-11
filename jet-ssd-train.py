@@ -83,7 +83,8 @@ def execute(rank, world_size, name, quantized, dataset, output, training_pref,
                           momentum=training_pref['momentum'],
                           weight_decay=training_pref['weight_decay'])
     scheduler = optim.lr_scheduler.MultiStepLR(optimizer,
-                                               milestones=[40, 60, 80, 90],
+                                               milestones=[20, 30, 50, 60,
+                                                           70, 80, 90],
                                                gamma=0.5)
     if rank == 0:
         cp_es = EarlyStopping(patience=training_pref['patience'],
