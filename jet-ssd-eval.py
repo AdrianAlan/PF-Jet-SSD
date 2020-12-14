@@ -168,7 +168,7 @@ if __name__ == '__main__':
         logger = set_logging('Test_SSD', '{}.log'.format(base), args.verbose)
         logger.info('Testing {0} model'.format(source_path))
 
-        net = build_ssd(ssd_settings, inference=True)
+        net = build_ssd(0, ssd_settings, inference=True)
         net.load_weights(source_path)
         cudnn.benchmark = True
         net = net.cuda()
