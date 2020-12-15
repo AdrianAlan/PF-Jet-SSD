@@ -19,7 +19,7 @@ training_pref:
  batch_size_validation: 150
  max_epochs: 100
  momentum: .9
- patience: 20
+ patience: 50
  weight_decay: 0.0005
  workers: 0
 
