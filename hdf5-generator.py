@@ -371,7 +371,7 @@ if __name__ == '__main__':
         args.src_folder, args.nfiles, args.config)
 
     pb = None
-    if self.verbose:
+    if args.verbose:
         pb = tqdm(total=total_events, desc=('Processing %s' % args.src_folder))
 
     for index, file_dict in enumerate(files_details):
@@ -385,5 +385,5 @@ if __name__ == '__main__':
                 verbose=args.verbose)
         generator.create_hdf5_dataset(pb)
 
-    if self.verbose:
+    if args.verbose:
         pb.close()
