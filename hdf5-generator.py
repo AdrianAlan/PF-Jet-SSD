@@ -312,6 +312,7 @@ class Utils():
         gtotal, fid, event_min_next = 0, 0, 0
         batch_id = 1
         batch_size = total / float(nofiles)
+        jtype = folder.split('/')[-1]
 
         while gtotal < total:
 
@@ -347,7 +348,7 @@ class Utils():
 
             gtotal = gtotal + event_max - event_min
 
-        return files_details, batch_size, gtotal
+        return files_details, batch_size, gtotal, jtype
 
 
 if __name__ == '__main__':
@@ -367,19 +368,19 @@ if __name__ == '__main__':
 
     utils = Utils()
 
-    files_details, batch_size, total_events = utils.parse_config(
+    files_details, batch_size, total_events, jtype = utils.parse_config(
         args.src_folder, args.nfiles, args.config)
 
     pb = None
     if args.verbose:
-        pb = tqdm(total=total_events, desc=('Processing %s' % args.src_folder))
+        pb = tqdm(total=total_events, desc=('Processing %s' % jtype))
 
     for index, file_dict in enumerate(files_details):
 
         dataset_size = int((index+1)*batch_size)-int((index)*batch_size)
         generator = HDF5Generator(
                 hdf5_dataset_path='{0}/{1}_{2}.h5'.format(
-                        args.save_dir, args.src_folder, index),
+                        args.save_dir, jtype, index),
                 hdf5_dataset_size=dataset_size,
                 files_details=file_dict,
                 verbose=args.verbose)
