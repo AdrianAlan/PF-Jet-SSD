@@ -370,6 +370,7 @@ if __name__ == '__main__':
     files_details, batch_size, total_events = utils.parse_config(
         args.src_folder, args.nfiles, args.config)
 
+    pb = None
     if self.verbose:
         pb = tqdm(total=total_events, desc=('Processing %s' % args.src_folder))
 
