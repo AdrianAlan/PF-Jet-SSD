@@ -1,4 +1,6 @@
+data/
 models/
 plots/*.pdf
 plots/*.png
 plots/*.json
+uproot_methods/
