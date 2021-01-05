@@ -21,7 +21,7 @@ class PhysicsConstants():
         self.delphes = uproot.open(example_file)['Delphes']
         self.min_eta = -3
         self.max_eta = 3
-        self.min_pt = {'b': 21., 'h': 312., 'q': 1., 't': 433., 'W': 201}
+        self.min_pt = {'b': 30., 'h': 200., 'q': 30., 't': 200., 'W': 200}
         self.tower = self.delphes['Tower']
 
     def get_edges_ecal(self, edge_index, tower, sample_events=1000):
