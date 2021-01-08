@@ -114,6 +114,23 @@ class HDF5Generator:
                 maxshape=(None),
                 dtype=h5py.special_dtype(vlen=np.int16))
 
+        hdf5_track_pt = hdf5_dataset.create_dataset(
+                name='track_pt',
+                shape=(self.hdf5_dataset_size,),
+                maxshape=(None),
+                dtype=h5py.special_dtype(vlen=np.float32))
+
+        hdf5_track_phi = hdf5_dataset.create_dataset(
+                name='track_phi',
+                shape=(self.hdf5_dataset_size,),
+                maxshape=(None),
+                dtype=h5py.special_dtype(vlen=np.int16))
+
+        hdf5_track_eta = hdf5_dataset.create_dataset(
+                name='track_eta',
+                shape=(self.hdf5_dataset_size,),
+                maxshape=(None),
+                dtype=h5py.special_dtype(vlen=np.int16))
         i = 0
 
         for file_details in self.files_details:
@@ -141,6 +158,11 @@ class HDF5Generator:
             particle_py_full_file = particle['Particle.Py'].array()
             particle_pz_full_file = particle['Particle.Pz'].array()
             particle_e_full_file = particle['Particle.E'].array()
+
+            tracks = file['Delphes']['Track']
+            tracker_pt_full_file = tracks['Track.PT'].array()  # Tracker PT
+            tracker_eta_full_file = tracks['Track.Eta'].array()  # Tracker x
+            tracker_phi_full_file = tracks['Track.Phi'].array()  # Tracker y
 
             for event_number in np.arange(events[0], events[1], dtype=int):
 
@@ -202,6 +224,28 @@ class HDF5Generator:
                 hcal_phis, hcal_etas, hcal_energy = self.hcal_resize(
                     hcal_phis, hcal_etas, hcal_energy)
 
+                # Get Track info
+                etas = tracker_eta_full_file[event_number]
+                phis = tracker_phi_full_file[event_number]
+                pt = tracker_pt_full_file[event_number]
+
+                etas_mask = ((etas > self.edges_eta_ecal[0]) &
+                             (etas < self.edges_eta_ecal[-1]))
+
+                etas = etas[etas_mask]
+                phis = phis[etas_mask]
+                pt = pt[etas_mask]
+                hist = np.histogram2d(etas,
+                                      phis,
+                                      bins=[self.edges_eta_ecal,
+                                            self.edges_phi_ecal],
+                                      weights=pt)[0]
+                nonz = np.argwhere(hist)
+
+                track_eta = nonz[:, 0]
+                track_phi = nonz[:, 1]
+                track_pt = hist[track_eta, track_phi]
+
                 # Push the data to hdf5
                 hdf5_ecal_energy[i] = ecal_energy
                 hdf5_ecal_phi[i] = ecal_phis
@@ -211,6 +255,9 @@ class HDF5Generator:
                 hdf5_hcal_phi[i] = hcal_phis
                 hdf5_hcal_eta[i] = hcal_etas
 
+                hdf5_track_pt[i] = track_pt
+                hdf5_track_phi[i] = track_phi
+                hdf5_track_eta[i] = track_eta
                 # Flatten the labels array and write it to the labels dataset.
                 hdf5_labels[i] = labels.reshape(-1)
 
