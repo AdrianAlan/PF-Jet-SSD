@@ -16,12 +16,12 @@ class PhysicsConstants():
     def __init__(self, example_file):
 
         # Define jet constants
-        self.classes = {'b': 0, 'h': 1, 'q': 3, 't': 2, 'W': 1}
+        self.classes = {'q': 0, 'h': 1, 't': 2, 'W': 1}
         self.delta_r = .4
         self.delphes = uproot.open(example_file)['Delphes']
         self.min_eta = -3
         self.max_eta = 3
-        self.min_pt = {'b': 30., 'h': 200., 'q': 30., 't': 200., 'W': 200}
+        self.min_pt = {'q': 30., 'h': 200., 't': 200., 'W': 200}
         self.tower = self.delphes['Tower']
 
     def get_edges_ecal(self, edge_index, tower, sample_events=1000):
@@ -302,10 +302,10 @@ class HDF5Generator:
                     if lv.delta_r(jlv) < self.constants.delta_r:
                         label = self.constants.classes['h']
                         break
-            if not label and pt > self.constants.min_pt['b']:
-                for lv in plv[p_pid == 5]:
+            if not label and pt > self.constants.min_pt['q']:
+                for lv in plv[p_pid <= 5]:
                     if lv.delta_r(jlv) < self.constants.delta_r:
-                        label = self.constants.classes['b']
+                        label = self.constants.classes['q']
                         break
 
             if label is not None:
