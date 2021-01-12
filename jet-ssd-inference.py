@@ -7,6 +7,7 @@ import torch.backends.cudnn as cudnn
 import yaml
 
 from ssd.net import build_ssd
+from utils import *
 
 if __name__ == '__main__':
 
@@ -19,10 +20,9 @@ if __name__ == '__main__':
     args = parser.parse_args()
     config = yaml.safe_load(open(args.config))
 
-    logger = set_logging('Test_SSD', '{}.log'.format(base), args.verbose)
-
     base = '{}/{}'.format(config['output']['model'], args.model)
     source_path = '{}.pth'.format(base)
+    logger = set_logging('Test_SSD', '{}.log'.format(base), args.verbose)
     logger.info('Testing {0} model'.format(source_path))
 
     if not torch.cuda.is_available():
