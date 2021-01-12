@@ -31,6 +31,17 @@ evaluation_pref:
   - 't'
  workers: 0
 
+inference_pref:
+  batch_sizes:
+   - 1
+   - 5
+   - 10
+   - 50
+   - 100
+   - 500
+  rank: 0
+  samples: 1000
+
 ssd_settings:
  confidence_threshold: .01
  feature_maps:

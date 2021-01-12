@@ -31,10 +31,10 @@ if __name__ == '__main__':
 
     torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
-    evaluation_pref = config['evaluation_pref']
-    bs = evaluation_pref['batch_size']
-    samples = 1000
-    rank = 0
+    inference_pref = config['inference_pref']
+    batch_sizes = inference_pref['batch_sizes']
+    samples = inference_pref['samples']
+    rank = inference_pref['rank']
 
     ssd_settings = config['ssd_settings']
     ssd_settings['n_classes'] += 1
