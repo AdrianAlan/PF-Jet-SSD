@@ -51,21 +51,26 @@ if __name__ == '__main__':
     e = torch.cuda.Event(enable_timing=True)
     measurements = np.zeros((samples, 1))
 
-    dummy_input = torch.unsqueeze(torch.randn(in_dim), 0).to(device)
-    logger.info('GPU warm-up')
-    for _ in range(10):
-        _ = net(dummy_input)
+    for bs in batch_sizes:
+        logger.info('Measure for batch size:{0}'.format(bs))
 
-    logger.info('Measuring latency')
-    with torch.no_grad():
-        for i in range(samples):
-            s.record()
-            _ = net(dummy_input)
-            e.record()
-            torch.cuda.synchronize()
-            measurements[i] = s.elapsed_time(e)
+        dummy_input = torch.unsqueeze(torch.randn(in_dim), 0)
+        batch = torch.cat(bs*[dummy_input]).to(device)
 
-    mean = np.mean(measurements)
-    std = np.std(measurements)
+        logger.info('GPU warm-up')
+        for _ in range(10):
+            _ = net(batch)
 
-    logger.info('Mean inference time: {0:.2f} ± {1:.2f} ms'.format(mean, std))
+        logger.info('Measuring latency')
+        with torch.no_grad():
+            for i in range(samples):
+                s.record()
+                _ = net(batch)
+                e.record()
+                torch.cuda.synchronize()
+                measurements[i] = s.elapsed_time(e)
+
+        mean = np.mean(measurements)
+        std = np.std(measurements)
+
+        logger.info('Mean inference: {0:.2f} ± {1:.2f} ms'.format(mean, std))
