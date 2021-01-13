@@ -34,13 +34,16 @@ evaluation_pref:
 inference_pref:
   batch_sizes:
    - 1
+   - 2
    - 5
+   - 8
    - 10
+   - 20
    - 50
+   - 80
    - 100
-   - 500
   rank: 0
-  samples: 1000
+  samples: 300
 
 ssd_settings:
  confidence_threshold: .01
