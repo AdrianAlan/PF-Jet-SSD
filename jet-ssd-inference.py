@@ -72,5 +72,6 @@ if __name__ == '__main__':
 
         mean = np.mean(measurements)
         std = np.std(measurements)
-
+        throughput = bs*1000/mean
         logger.info('Mean inference: {0:.2f} ± {1:.2f} ms'.format(mean, std))
+        logger.info('Mean throughput: {0:.2f} events/s'.format(throughput))
