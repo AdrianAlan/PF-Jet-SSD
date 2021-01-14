@@ -6,7 +6,6 @@ import yaml
 
 from sklearn.metrics import average_precision_score, precision_recall_curve
 from ssd.net import build_ssd
-from timeit import default_timer as timer
 from tqdm import tqdm
 from utils import *
 
@@ -17,17 +16,13 @@ def execute(model, dataset, im_size, conf_threshold=0., batch_size=50,
 
     results = [torch.empty(0, 2) for _ in range(num_classes)]
     deltas = torch.empty((0, 5))
-    inf_time = torch.empty(0)
 
     if args.verbose:
         progress_bar = tqdm(total=len(dataset), desc='Evaluating events')
 
     for X, y in dataset:
 
-        t_start = timer()
         pred = model(X).data
-        t_end = timer()
-        inf_time = torch.cat((inf_time, torch.Tensor([t_end-t_start])))
 
         for idx in range(batch_size):
             detections, targets = pred[idx], y[idx]
@@ -112,8 +107,6 @@ def execute(model, dataset, im_size, conf_threshold=0., batch_size=50,
     if args.verbose:
         progress_bar.close()
 
-    it = inf_time.mean()*1000/batch_size
-
     ret = []
     for c in range(num_classes):
         truth = results[c][:, 0].cpu().numpy()
@@ -124,7 +117,7 @@ def execute(model, dataset, im_size, conf_threshold=0., batch_size=50,
 
     deltas = torch.abs(deltas)
 
-    return it.cpu().numpy(), ret, deltas.cpu().numpy()
+    return ret, deltas.cpu().numpy()
 
 
 if __name__ == '__main__':
@@ -179,12 +172,10 @@ if __name__ == '__main__':
                                  qbits=qbits, shuffle=False)
 
         with torch.no_grad():
-            it, res, delta = execute(net, loader, batch_size=bs,
-                                     conf_threshold=ct, im_size=in_dim[1:],
-                                     num_classes=num_classes,
-                                     overlap_threshold=ot, top_k=top_k,
-                                     verbose=args.verbose)
-        logger.debug('Average inference time: {0:.3f} ms'.format(it))
+            res, delta = execute(net, loader, batch_size=bs, conf_threshold=ct,
+                                 im_size=in_dim[1:], num_classes=num_classes,
+                                 overlap_threshold=ot, top_k=top_k,
+                                 verbose=args.verbose)
         for _, _, c, ap in res:
             logger.debug('AP for {0} jets: {1:.3f}'.format(jet_names[c], ap))
 
