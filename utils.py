@@ -234,6 +234,40 @@ class Plotting():
                 fig.savefig('%s/delta-%s-%s' % (self.save_dir, c, n))
                 plt.close(fig)
 
+    def draw_errorbar(self, x, y, e, ylabel, name, log=True):
+        """Plots errobars as a function of batch size"""
+        fig, ax = plt.subplots()
+
+        xlabel = 'Batch size [events]'
+        ax.set_xlabel(xlabel, horizontalalignment='right', x=1.0)
+        ax.set_ylabel(ylabel, horizontalalignment='right', y=1.0)
+        ax.set_xscale('log')
+        if log:
+            ax.set_yscale('log')
+        ax.errorbar(x, y, yerr=e,
+                    fmt='.',
+                    elinewidth=1,
+                    markersize=5,
+                    color=self.colors[0]['shade_500'])
+
+        cms = ax.text(0, 1.02, 'CMS',
+                      weight='bold',
+                      transform=ax.transAxes,
+                      color=self.color_palette['grey']['shade_900'],
+                      fontsize=13)
+
+        plt.gcf().canvas.draw()
+        bbox = cms.get_window_extent().inverse_transformed(plt.gca().transData)
+        ab = AnnotationBbox(self.get_logo(), (x[0], y[0]),
+                            xybox=(1.1*bbox.x1, (bbox.y1-bbox.y0)/2 + bbox.y0),
+                            xycoords='data',
+                            boxcoords='data',
+                            box_alignment=(0., 0.5),
+                            frameon=False)
+        ax.add_artist(ab)
+        fig.savefig('%s/inference-%s' % (self.save_dir, name))
+        plt.close(fig)
+
 
 class GetResources():
 

@@ -49,9 +49,13 @@ if __name__ == '__main__':
     net.to(device)
     s = torch.cuda.Event(enable_timing=True)
     e = torch.cuda.Event(enable_timing=True)
-    measurements = np.zeros((samples, 1))
+    batch_sizes = np.array(batch_sizes)
+    measurements = np.zeros((samples))
+    size = len(batch_sizes)
+    (means, nmeans, stds, nstds) = (np.zeros((size)), np.zeros((size)),
+                                    np.zeros((size)), np.zeros((size)))
 
-    for bs in batch_sizes:
+    for x, bs in enumerate(batch_sizes):
         logger.info('Measure for batch size:{0}'.format(bs))
 
         dummy_input = torch.unsqueeze(torch.randn(in_dim), 0)
@@ -72,6 +76,18 @@ if __name__ == '__main__':
 
         mean = np.mean(measurements)
         std = np.std(measurements)
+        nmean = np.mean(measurements / bs)
+        nstd = np.std(measurements / bs)
+        means[x] = mean
+        stds[x] = std
+        nmeans[x] = nmean
+        stds[x] = nstd
         throughput = bs*1000/mean
         logger.info('Mean inference: {0:.2f} ± {1:.2f} ms'.format(mean, std))
         logger.info('Mean throughput: {0:.2f} events/s'.format(throughput))
+
+    logger.info('Plotting results')
+    plot = Plotting(save_dir=config['output']['plots'])
+    plot.draw_errorbar(batch_sizes, means, stds, 'Latency [ms]', 'latency-raw')
+    plot.draw_errorbar(batch_sizes, nmeans, nstds, 'Latency [ms/event]',
+                       'latency-norm', log=False)

@@ -20,6 +20,8 @@ axes.spines.left: True
 axes.spines.bottom: True
 axes.titlesize: 14
 
+errorbar.capsize: 0
+
 grid.alpha: 0.3
 grid.linestyle: --
 grid.linewidth: 0.6
