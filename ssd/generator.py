@@ -6,11 +6,6 @@ from ssd import qutils
 
 class CalorimeterJetDataset(torch.utils.data.Dataset):
 
-    def __del__(self):
-
-        if hasattr(self, 'hdf5_dataset'):
-            self.hdf5_dataset.close()
-
     def __init__(self, rank, hdf5_source_path, input_dimensions, jet_size,
                  qbits=None, return_pt=False):
         """Generator for calorimeter and jet data"""
