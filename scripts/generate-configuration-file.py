@@ -26,12 +26,14 @@ def get_config(sdir):
             try:
                 file_path = join(current_path, file_name)
                 rfile = uproot.open(file_path)
-                events = len(rfile['Delphes']['Tower'].array())
+                events = len(rfile['Delphes']['Event'].array())
                 config[current_path]['files'][file_path] = events
                 total_events_in_file = total_events_in_file + events
             except ValueError:
                 pass
             except KeyError:
+                pass
+            except OSError:
                 pass
         config[current_path]['events'] = total_events_in_file
     return config
