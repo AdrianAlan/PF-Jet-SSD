@@ -4,17 +4,19 @@ import argparse
 import torch
 import torch.nn as nn
 import torch.backends.cudnn as cudnn
+import sys
 import yaml
 
 from ssd.net import build_ssd
 from utils import *
 
+
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser("Measure SSD's Inference Time")
     parser.add_argument('model', type=str, help='Input model name')
-    parser.add_argument('config', action=IsValidFile, type=str,
-                        help='Path to config file')
+    parser.add_argument('-c', '--config', action=IsValidFile, type=str,
+                        help='Path to config file', default='ssd-config.yml')
     parser.add_argument('-v', '--verbose', action='store_true',
                         help='Output verbosity')
     args = parser.parse_args()
@@ -50,13 +52,12 @@ if __name__ == '__main__':
     s = torch.cuda.Event(enable_timing=True)
     e = torch.cuda.Event(enable_timing=True)
     batch_sizes = np.array(batch_sizes)
-    measurements = np.zeros((samples))
-    size = len(batch_sizes)
-    (means, nmeans, stds, nstds) = (np.zeros((size)), np.zeros((size)),
-                                    np.zeros((size)), np.zeros((size)))
+    bs = len(batch_sizes)
+    lat_means, thr_means = (np.zeros((bs)), np.zeros((bs)))
+    lat_stds, thr_stds = (np.zeros((bs)), np.zeros((bs)))
 
     for x, bs in enumerate(batch_sizes):
-        logger.info('Measure for batch size:{0}'.format(bs))
+        logger.info('Measure for batch size: {0}'.format(bs))
 
         dummy_input = torch.unsqueeze(torch.randn(in_dim), 0)
         batch = torch.cat(bs*[dummy_input]).to(device)
@@ -66,6 +67,7 @@ if __name__ == '__main__':
             _ = net(batch)
 
         logger.info('Measuring latency')
+        measurements = np.zeros((samples))
         with torch.no_grad():
             for i in range(samples):
                 s.record()
@@ -74,20 +76,22 @@ if __name__ == '__main__':
                 torch.cuda.synchronize()
                 measurements[i] = s.elapsed_time(e)
 
-        mean = np.mean(measurements)
-        std = np.std(measurements)
-        nmean = np.mean(measurements / bs)
-        nstd = np.std(measurements / bs)
-        means[x] = mean
-        stds[x] = std
-        nmeans[x] = nmean
-        stds[x] = nstd
-        throughput = bs*1000/mean
-        logger.info('Mean inference: {0:.2f} ± {1:.2f} ms'.format(mean, std))
-        logger.info('Mean throughput: {0:.2f} events/s'.format(throughput))
+        lat_mean = np.mean(measurements / bs)
+        lat_std = np.std(measurements / bs)
+        thr_mean = np.mean(1000*bs / measurements)
+        thr_std = np.std(1000*bs / measurements)
+
+        lat_means[x] = lat_mean
+        lat_stds[x] = lat_std
+        thr_means[x] = thr_mean
+        thr_stds[x] = thr_std
+
+        logger.info('Latency: {0:.2f} ± {1:.2f} ms'.format(lat_mean, lat_std))
+        logger.info('Throughput: {0:.2f} eps'.format(thr_mean))
 
     logger.info('Plotting results')
     plot = Plotting(save_dir=config['output']['plots'])
-    plot.draw_errorbar(batch_sizes, means, stds, 'Latency [ms]', 'latency-raw')
-    plot.draw_errorbar(batch_sizes, nmeans, nstds, 'Latency [ms/event]',
-                       'latency-norm', log=False)
+    plot.draw_errorbar(batch_sizes, lat_means, lat_stds,
+                       'Latency [ms]', 'latency-gpu')
+    plot.draw_errorbar(batch_sizes, thr_means, thr_stds,
+                       'Throughput [eps]', 'throughput-gpu')

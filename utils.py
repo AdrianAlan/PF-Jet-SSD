@@ -234,7 +234,7 @@ class Plotting():
                 fig.savefig('%s/delta-%s-%s' % (self.save_dir, c, n))
                 plt.close(fig)
 
-    def draw_errorbar(self, x, y, e, ylabel, name, log=True):
+    def draw_errorbar(self, x, y, e, ylabel, name):
         """Plots errobars as a function of batch size"""
         fig, ax = plt.subplots()
 
@@ -242,8 +242,6 @@ class Plotting():
         ax.set_xlabel(xlabel, horizontalalignment='right', x=1.0)
         ax.set_ylabel(ylabel, horizontalalignment='right', y=1.0)
         ax.set_xscale('log')
-        if log:
-            ax.set_yscale('log')
         ax.errorbar(x, y, yerr=e,
                     fmt='.',
                     elinewidth=1,
