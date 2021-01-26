@@ -22,28 +22,21 @@ class PhysicsConstants():
         self.min_eta = -3
         self.max_eta = 3
         self.min_pt = {'q': 30., 'h': 200., 't': 200., 'W': 200}
-        self.tower = self.delphes['Tower']
 
-    def get_edges_ecal(self, edge_index, tower, sample_events=1000):
-        tower_mask_full_file = self.tower[tower].array()
-        edges_full_file = self.tower['Tower.Edges[4]'].array()
+    def get_edges_ecal(self, x, sample_events=1000):
 
-        global_edges = np.array([], dtype=np.float32)
+        all_edges = np.array([], dtype=np.float32)
+        edge_arr = self.delphes['EFlowPhoton']['EFlowPhoton.Edges[4]'].array()
 
         for i in range(sample_events):
+            all_edges = np.append(all_edges, edge_arr[i][:, [x, x+1]])
+            all_edges = np.unique(all_edges)
 
-            edges_event = edges_full_file[i][tower_mask_full_file[i] > 0]
-            global_edges = np.append(global_edges,
-                                     edges_event[:, edge_index])
-            global_edges = np.append(global_edges,
-                                     edges_event[:, edge_index+1])
-            global_edges = np.unique(global_edges)
+        if x == 0:
+            all_edges = all_edges[(all_edges > self.min_eta) &
+                                  (all_edges < self.max_eta)]
 
-        if edge_index == 0:
-            global_edges = global_edges[(global_edges > self.min_eta) &
-                                        (global_edges < self.max_eta)]
-
-        return global_edges
+        return all_edges
 
 
 class HDF5Generator:
@@ -52,19 +45,13 @@ class HDF5Generator:
                  verbose=True):
 
         self.constants = PhysicsConstants(list(files_details[0])[0])
-
-        self.edges_eta_ecal = self.constants.get_edges_ecal(edge_index=0,
-                                                            tower='Tower.Eem')
-        self.edges_phi_ecal = self.constants.get_edges_ecal(edge_index=2,
-                                                            tower='Tower.Eem')
-        self.edges_eta_hcal = self.constants.get_edges_ecal(edge_index=0,
-                                                            tower='Tower.Ehad')
-        self.edges_phi_hcal = self.constants.get_edges_ecal(edge_index=2,
-                                                            tower='Tower.Ehad')
+        self.edges_eta = self.constants.get_edges_ecal(0)
+        self.edges_phi = self.constants.get_edges_ecal(2)
 
         self.hdf5_dataset_path = hdf5_dataset_path
         self.hdf5_dataset_size = hdf5_dataset_size
         self.files_details = files_details
+
         self.verbose = verbose
 
     def create_hdf5_dataset(self, progress_bar):
@@ -78,59 +65,60 @@ class HDF5Generator:
                 maxshape=(None),
                 dtype=h5py.special_dtype(vlen=np.float32))
 
-        hdf5_ecal_energy = hdf5_dataset.create_dataset(
-                name='ecal_energy',
+        hdf5_EFlowTrack_Eta = hdf5_dataset.create_dataset(
+                name='EFlowTrack_Eta',
+                shape=(self.hdf5_dataset_size,),
+                maxshape=(None),
+                dtype=h5py.special_dtype(vlen=np.int16))
+
+        hdf5_EFlowTrack_Phi = hdf5_dataset.create_dataset(
+                name='EFlowTrack_Phi',
+                shape=(self.hdf5_dataset_size,),
+                maxshape=(None),
+                dtype=h5py.special_dtype(vlen=np.int16))
+
+        hdf5_EFlowTrack_PT = hdf5_dataset.create_dataset(
+                name='EFlowTrack_PT',
                 shape=(self.hdf5_dataset_size,),
                 maxshape=(None),
                 dtype=h5py.special_dtype(vlen=np.float32))
 
-        hdf5_ecal_phi = hdf5_dataset.create_dataset(
-                name='ecal_phi',
+        hdf5_EFlowPhoton_Eta = hdf5_dataset.create_dataset(
+                name='EFlowPhoton_Eta',
                 shape=(self.hdf5_dataset_size,),
                 maxshape=(None),
                 dtype=h5py.special_dtype(vlen=np.int16))
 
-        hdf5_ecal_eta = hdf5_dataset.create_dataset(
-                name='ecal_eta',
+        hdf5_EFlowPhoton_Phi = hdf5_dataset.create_dataset(
+                name='EFlowPhoton_Phi',
                 shape=(self.hdf5_dataset_size,),
                 maxshape=(None),
                 dtype=h5py.special_dtype(vlen=np.int16))
 
-        hdf5_hcal_energy = hdf5_dataset.create_dataset(
-                name='hcal_energy',
+        hdf5_EFlowPhoton_ET = hdf5_dataset.create_dataset(
+                name='EFlowPhoton_ET',
                 shape=(self.hdf5_dataset_size,),
                 maxshape=(None),
                 dtype=h5py.special_dtype(vlen=np.float32))
 
-        hdf5_hcal_phi = hdf5_dataset.create_dataset(
-                name='hcal_phi',
+        hdf5_EFlowNeutralHadron_Eta = hdf5_dataset.create_dataset(
+                name='EFlowNeutralHadron_Eta',
                 shape=(self.hdf5_dataset_size,),
                 maxshape=(None),
                 dtype=h5py.special_dtype(vlen=np.int16))
 
-        hdf5_hcal_eta = hdf5_dataset.create_dataset(
-                name='hcal_eta',
+        hdf5_EFlowNeutralHadron_Phi = hdf5_dataset.create_dataset(
+                name='EFlowNeutralHadron_Phi',
                 shape=(self.hdf5_dataset_size,),
                 maxshape=(None),
                 dtype=h5py.special_dtype(vlen=np.int16))
 
-        hdf5_track_pt = hdf5_dataset.create_dataset(
-                name='track_pt',
+        hdf5_EFlowNeutralHadron_ET = hdf5_dataset.create_dataset(
+                name='EFlowNeutralHadron_ET',
                 shape=(self.hdf5_dataset_size,),
                 maxshape=(None),
                 dtype=h5py.special_dtype(vlen=np.float32))
 
-        hdf5_track_phi = hdf5_dataset.create_dataset(
-                name='track_phi',
-                shape=(self.hdf5_dataset_size,),
-                maxshape=(None),
-                dtype=h5py.special_dtype(vlen=np.int16))
-
-        hdf5_track_eta = hdf5_dataset.create_dataset(
-                name='track_eta',
-                shape=(self.hdf5_dataset_size,),
-                maxshape=(None),
-                dtype=h5py.special_dtype(vlen=np.int16))
         i = 0
 
         for file_details in self.files_details:
@@ -138,13 +126,23 @@ class HDF5Generator:
 
             events = file_details[file_path]
 
-            # First load values from file
             file = uproot.open(file_path)
 
-            towers = file['Delphes']['Tower']
-            ecal_energy_full_file = towers['Tower.Eem'].array()  # ECAL E
-            hcal_energy_full_file = towers['Tower.Ehad'].array()  # HCAL E
-            edges_full_file = towers['Tower.Edges[4]'].array()  # Crystal edge
+            eFlowTrack = file['Delphes']['EFlowTrack']
+            eFlowPhoton = file['Delphes']['EFlowPhoton']
+            eFlowNH = file['Delphes']['EFlowNeutralHadron']
+
+            eFlowTrack_Eta_full = eFlowTrack['EFlowTrack.Eta'].array()
+            eFlowTrack_Phi_full = eFlowTrack['EFlowTrack.Phi'].array()
+            eFlowTrack_PT_full = eFlowTrack['EFlowTrack.PT'].array()
+
+            eFlowPhoton_Eta_full = eFlowPhoton['EFlowPhoton.Eta'].array()
+            eFlowPhoton_Phi_full = eFlowPhoton['EFlowPhoton.Phi'].array()
+            eFlowPhoton_ET_full = eFlowPhoton['EFlowPhoton.ET'].array()
+
+            eFlowNH_Eta_full = eFlowNH['EFlowNeutralHadron.Eta'].array()
+            eFlowNH_Phi_full = eFlowNH['EFlowNeutralHadron.Phi'].array()
+            eFlowNH_ET_full = eFlowNH['EFlowNeutralHadron.ET'].array()
 
             genjet = file['Delphes']['GenJet']
             genjet_pt_full_file = genjet['GenJet.PT'].array()  # Jet PT
@@ -159,11 +157,6 @@ class HDF5Generator:
             particle_pz_full_file = particle['Particle.Pz'].array()
             particle_e_full_file = particle['Particle.E'].array()
 
-            tracks = file['Delphes']['Track']
-            tracker_pt_full_file = tracks['Track.PT'].array()  # Tracker PT
-            tracker_eta_full_file = tracks['Track.Eta'].array()  # Tracker x
-            tracker_phi_full_file = tracks['Track.Phi'].array()  # Tracker y
-
             for event_number in np.arange(events[0], events[1], dtype=int):
 
                 # Get jet labels
@@ -172,8 +165,8 @@ class HDF5Generator:
                 jet_phi = genjet_phi_full_file[event_number]
                 jet_mass = genjet_mass_full_file[event_number]
 
-                etas_mask = ((jet_eta > self.edges_eta_ecal[0]) &
-                             (jet_eta < self.edges_eta_ecal[-1]))
+                etas_mask = ((jet_eta > self.edges_eta[0]) &
+                             (jet_eta < self.edges_eta[-1]))
 
                 jet_pt = jet_pt[etas_mask]
                 jet_eta = jet_eta[etas_mask]
@@ -190,78 +183,43 @@ class HDF5Generator:
                                          particle_pid, particle_px,
                                          particle_py, particle_pz, particle_e)
 
-                # Get ECAL info
-                ecal_mask = ecal_energy_full_file[event_number] > 0
-
-                etas = edges_full_file[event_number][ecal_mask][:, 0]
-                phis = edges_full_file[event_number][ecal_mask][:, 2]
-                energy = ecal_energy_full_file[event_number][ecal_mask]
-
-                etas_mask = ((etas > self.edges_eta_ecal[0]) &
-                             (etas < self.edges_eta_ecal[-1]))
-
-                etas = etas[etas_mask]
-                phis = phis[etas_mask]
-                ecal_phis, ecal_etas = self.get_energy_map(etas, phis,
-                                                           cal='ECAL')
-                ecal_energy = energy[etas_mask]
-
-                # Get HCAL info
-                hcal_mask = hcal_energy_full_file[event_number] > 0
-
-                etas = edges_full_file[event_number][hcal_mask][:, 0]
-                phis = edges_full_file[event_number][hcal_mask][:, 2]
-                energy = hcal_energy_full_file[event_number][hcal_mask]
-
-                etas_mask = ((etas > self.edges_eta_hcal[0]) &
-                             (etas < self.edges_eta_hcal[-1]))
-
-                etas = etas[etas_mask]
-                phis = phis[etas_mask]
-                hcal_phis, hcal_etas = self.get_energy_map(etas, phis,
-                                                           cal='HCAL')
-                hcal_energy = energy[etas_mask]
-                hcal_phis, hcal_etas, hcal_energy = self.hcal_resize(
-                    hcal_phis, hcal_etas, hcal_energy)
-
-                # Get Track info
-                etas = tracker_eta_full_file[event_number]
-                phis = tracker_phi_full_file[event_number]
-                pt = tracker_pt_full_file[event_number]
-
-                etas_mask = ((etas > self.edges_eta_ecal[0]) &
-                             (etas < self.edges_eta_ecal[-1]))
-
-                etas = etas[etas_mask]
-                phis = phis[etas_mask]
-                pt = pt[etas_mask]
-                hist = np.histogram2d(etas,
-                                      phis,
-                                      bins=[self.edges_eta_ecal,
-                                            self.edges_phi_ecal],
-                                      weights=pt)[0]
-                nonz = np.argwhere(hist)
-
-                track_eta = nonz[:, 0]
-                track_phi = nonz[:, 1]
-                track_pt = hist[track_eta, track_phi]
-
-                # Push the data to hdf5
-                hdf5_ecal_energy[i] = ecal_energy
-                hdf5_ecal_phi[i] = ecal_phis
-                hdf5_ecal_eta[i] = ecal_etas
-
-                hdf5_hcal_energy[i] = hcal_energy
-                hdf5_hcal_phi[i] = hcal_phis
-                hdf5_hcal_eta[i] = hcal_etas
-
-                hdf5_track_pt[i] = track_pt
-                hdf5_track_phi[i] = track_phi
-                hdf5_track_eta[i] = track_eta
                 # Flatten the labels array and write it to the labels dataset.
                 hdf5_labels[i] = labels.reshape(-1)
 
-                i = i + 1
+                # Get EFlowTrack
+                e = eFlowTrack_Eta_full[event_number]
+                p = eFlowTrack_Phi_full[event_number]
+                v = eFlowTrack_PT_full[event_number]
+                mask = ((e > self.edges_eta[0]) & (e < self.edges_eta[-1]))
+                e, p, v = e[mask], p[mask], v[mask]
+                e, p, v = self.get_energy_map(e, p, v)
+                hdf5_EFlowTrack_Eta[i] = e
+                hdf5_EFlowTrack_Phi[i] = p
+                hdf5_EFlowTrack_PT[i] = v
+
+                # Get EFlowPhoton
+                e = eFlowPhoton_Eta_full[event_number]
+                p = eFlowPhoton_Phi_full[event_number]
+                v = eFlowPhoton_ET_full[event_number]
+                mask = ((e > self.edges_eta[0]) & (e < self.edges_eta[-1]))
+                e, p, v = e[mask], p[mask], v[mask]
+                e, p, v = self.get_energy_map(e, p, v)
+                hdf5_EFlowPhoton_Eta[i] = e
+                hdf5_EFlowPhoton_Phi[i] = p
+                hdf5_EFlowPhoton_ET[i] = v
+
+                # Get EFlowNeutralHadron
+                e = eFlowNH_Eta_full[event_number]
+                p = eFlowNH_Phi_full[event_number]
+                v = eFlowNH_ET_full[event_number]
+                mask = ((e > self.edges_eta[0]) & (e < self.edges_eta[-1]))
+                e, p, v = e[mask], p[mask], v[mask]
+                e, p, v = self.get_energy_map(e, p, v)
+                hdf5_EFlowNeutralHadron_Eta[i] = e
+                hdf5_EFlowNeutralHadron_Phi[i] = p
+                hdf5_EFlowNeutralHadron_ET[i] = v
+
+                i += 1
 
                 if self.verbose:
                     progress_bar.update(1)
@@ -309,39 +267,22 @@ class HDF5Generator:
                         break
 
             if label is not None:
-                e = np.argmax(self.edges_eta_ecal >= eta) - 1
-                p = np.argmax(self.edges_phi_ecal >= phi) - 1
+                e = np.argmax(self.edges_eta >= eta) - 1
+                p = np.argmax(self.edges_phi >= phi) - 1
                 labels = np.vstack((labels, [label, e, p, pt, mass]))
         return labels
 
-    def hcal_resize(self, indices_phi, indices_eta, energy):
-        mask = (indices_eta >= 85) & (indices_eta <= 118)
-
-        energy = np.concatenate(
-            [np.repeat(x, 5) if mask[i] else np.array([x]) for i, x
-             in enumerate(energy)])
-        indices_phi = np.concatenate(
-            [np.repeat(x, 5) if mask[i] else np.array([x]) for i, x
-                in enumerate(indices_phi)])
-        indices_eta = np.concatenate(
-            [np.array([e]) if e < 85 else np.array([e + 136])
-                if e > 118 else 5*e-340 + np.arange(5) for e in indices_eta])
-
-        return indices_phi, indices_eta, energy
-
-    def get_energy_map(self, etas, phis, cal='ECAL'):
-
-        if cal == 'ECAL':
-            edges_phi = self.edges_phi_ecal
-            edges_eta = self.edges_eta_ecal
-        if cal == 'HCAL':
-            edges_phi = self.edges_phi_hcal
-            edges_eta = self.edges_eta_hcal
-
-        indices_phi = np.squeeze([np.where(edges_phi == i) for i in phis])
-        indices_eta = np.squeeze([np.where(edges_eta == i) for i in etas])
-
-        return indices_phi, indices_eta
+    def get_energy_map(self, etas, phis, values):
+        h, _, _ = np.histogram2d(etas,
+                                 phis,
+                                 bins=[self.edges_eta,
+                                       self.edges_phi],
+                                 weights=values)
+        bins = np.argwhere(h)
+        indices_eta = bins[:, 0]
+        indices_phi = bins[:, 1]
+        values = h[indices_eta, indices_phi]
+        return indices_eta, indices_phi, values
 
 
 class Utils():
