@@ -16,12 +16,13 @@ class PhysicsConstants():
     def __init__(self, example_file):
 
         # Define jet constants
-        self.classes = {'q': 0, 'h': 1, 't': 2, 'W': 1}
         self.delta_r = .4
         self.delphes = uproot.open(example_file)['Delphes']
         self.min_eta = -3
         self.max_eta = 3
         self.min_pt = {'q': 30., 'h': 200., 't': 200., 'W': 200}
+        self.settings = {'H': {'id': 1, 'pid': 25},
+                         'Z': {'id': 2, 'pid': 23}}
 
     def get_edges_ecal(self, x, sample_events=1000):
 
@@ -144,44 +145,25 @@ class HDF5Generator:
             eFlowNH_Phi_full = eFlowNH['EFlowNeutralHadron.Phi'].array()
             eFlowNH_ET_full = eFlowNH['EFlowNeutralHadron.ET'].array()
 
-            genjet = file['Delphes']['GenJet']
-            genjet_pt_full_file = genjet['GenJet.PT'].array()  # Jet PT
-            genjet_eta_full_file = genjet['GenJet.Eta'].array()  # Jet x
-            genjet_phi_full_file = genjet['GenJet.Phi'].array()  # Jet y
-            genjet_mass_full_file = genjet['GenJet.Mass'].array()  # Jet mass
-
             particle = file['Delphes']['Particle']
-            particle_pid_full_file = particle['Particle.PID'].array()
-            particle_px_full_file = particle['Particle.Px'].array()
-            particle_py_full_file = particle['Particle.Py'].array()
-            particle_pz_full_file = particle['Particle.Pz'].array()
-            particle_e_full_file = particle['Particle.E'].array()
+            particle_PID_full = particle['Particle.PID'].array()
+            particle_Eta_full = particle['Particle.Eta'].array()
+            particle_Phi_full = particle['Particle.Phi'].array()
+            particle_PT_full = particle['Particle.PT'].array()
 
             for event_number in np.arange(events[0], events[1], dtype=int):
 
                 # Get jet labels
-                jet_pt = genjet_pt_full_file[event_number]
-                jet_eta = genjet_eta_full_file[event_number]
-                jet_phi = genjet_phi_full_file[event_number]
-                jet_mass = genjet_mass_full_file[event_number]
+                particle_PID = particle_PID_full[event_number]
+                particle_Eta = particle_Eta_full[event_number]
+                particle_Phi = particle_Phi_full[event_number]
+                particle_PT = particle_PT_full[event_number]
 
-                etas_mask = ((jet_eta > self.edges_eta[0]) &
-                             (jet_eta < self.edges_eta[-1]))
-
-                jet_pt = jet_pt[etas_mask]
-                jet_eta = jet_eta[etas_mask]
-                jet_phi = jet_phi[etas_mask]
-                jet_mass = jet_mass[etas_mask]
-
-                particle_pid = particle_pid_full_file[event_number]
-                particle_px = particle_px_full_file[event_number]
-                particle_py = particle_py_full_file[event_number]
-                particle_pz = particle_pz_full_file[event_number]
-                particle_e = particle_e_full_file[event_number]
-
-                labels = self.get_labels(jet_pt, jet_eta, jet_phi, jet_mass,
-                                         particle_pid, particle_px,
-                                         particle_py, particle_pz, particle_e)
+                labels = self.get_labels(['H', 'Z'],
+                                         particle_PID,
+                                         particle_Eta,
+                                         particle_Phi,
+                                         particle_PT)
 
                 # Flatten the labels array and write it to the labels dataset.
                 hdf5_labels[i] = labels.reshape(-1)
@@ -226,50 +208,18 @@ class HDF5Generator:
 
         hdf5_dataset.close()
 
-    def get_labels(self, j_pt, j_eta, j_phi, j_mass,
-                   p_pid, p_px, p_py, p_pz, p_e):
-
-        plv = np.array([])
-        labels = np.empty((0, 5))
-        p_pid = np.abs(p_pid)
-
-        for x, y, z, e in zip(p_px, p_py, p_pz, p_e):
-            plv = np.append(plv, TLorentzVector(x, y, z, e))
-
-        for pt, eta, phi, mass in zip(j_pt, j_eta, j_phi, j_mass):
-            label = None
-
-            if mass < 1.:
-                continue
-
-            jlv = PtEtaPhiMassLorentzVector(pt, eta, phi, mass)
-
-            # Order is important
-            if not label and pt > self.constants.min_pt['t']:
-                for lv in plv[p_pid == 6]:
-                    if lv.delta_r(jlv) < self.constants.delta_r:
-                        label = self.constants.classes['t']
-                        break
-            if not label and pt > self.constants.min_pt['W']:
-                for lv in plv[(p_pid == 23) | (p_pid == 24)]:
-                    if lv.delta_r(jlv) < self.constants.delta_r:
-                        label = self.constants.classes['W']
-                        break
-            if not label and pt > self.constants.min_pt['h']:
-                for lv in plv[p_pid == 25]:
-                    if lv.delta_r(jlv) < self.constants.delta_r:
-                        label = self.constants.classes['h']
-                        break
-            if not label and pt > self.constants.min_pt['q']:
-                for lv in plv[p_pid <= 5]:
-                    if lv.delta_r(jlv) < self.constants.delta_r:
-                        label = self.constants.classes['q']
-                        break
-
-            if label is not None:
+    def get_labels(self, check_labels, pids, etas, phis, pts):
+        labels = np.empty((0, 4))
+        pids = np.abs(pids)
+        for label in check_labels:
+            jid = self.constants.settings[label]['id']
+            pid = self.constants.settings[label]['pid']
+            for i, (eta, phi, pt) in enumerate(zip(etas[pids == pid],
+                                                   phis[pids == pid],
+                                                   pts[pids == pid])):
                 e = np.argmax(self.edges_eta >= eta) - 1
                 p = np.argmax(self.edges_phi >= phi) - 1
-                labels = np.vstack((labels, [label, e, p, pt, mass]))
+                labels = np.vstack((labels, [jid, e, p, pt]))
         return labels
 
     def get_energy_map(self, etas, phis, values):
