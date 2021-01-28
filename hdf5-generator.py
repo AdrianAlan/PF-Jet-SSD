@@ -21,8 +21,10 @@ class PhysicsConstants():
         self.min_eta = -3
         self.max_eta = 3
         self.min_pt = {'q': 30., 'h': 200., 't': 200., 'W': 200}
-        self.settings = {'H': {'id': 1, 'pid': 25},
-                         'Z': {'id': 2, 'pid': 23}}
+        self.settings = {'t': {'id': 4, 'pid': 6},
+                         'Z': {'id': 2, 'pid': 23},
+                         'W': {'id': 3, 'pid': 24},
+                         'H': {'id': 1, 'pid': 25}}
 
     def get_edges_ecal(self, x, sample_events=1000):
 
@@ -146,6 +148,7 @@ class HDF5Generator:
             eFlowNH_ET_full = eFlowNH['EFlowNeutralHadron.ET'].array()
 
             particle = file['Delphes']['Particle']
+            particle_Status_full = particle['Particle.Status'].array()
             particle_PID_full = particle['Particle.PID'].array()
             particle_Eta_full = particle['Particle.Eta'].array()
             particle_Phi_full = particle['Particle.Phi'].array()
@@ -154,12 +157,14 @@ class HDF5Generator:
             for event_number in np.arange(events[0], events[1], dtype=int):
 
                 # Get jet labels
+                particle_Status = particle_Status_full[event_number]
                 particle_PID = particle_PID_full[event_number]
                 particle_Eta = particle_Eta_full[event_number]
                 particle_Phi = particle_Phi_full[event_number]
                 particle_PT = particle_PT_full[event_number]
 
-                labels = self.get_labels(['H', 'Z'],
+                labels = self.get_labels(['t', 'Z', 'W', 'Z'],
+                                         particle_Status,
                                          particle_PID,
                                          particle_Eta,
                                          particle_Phi,
@@ -208,17 +213,20 @@ class HDF5Generator:
 
         hdf5_dataset.close()
 
-    def get_labels(self, check_labels, pids, etas, phis, pts):
+    def get_labels(self, check_labels, status, pids, etas, phis, pts):
         labels = np.empty((0, 4))
         pids = np.abs(pids)
         for label in check_labels:
             jid = self.constants.settings[label]['id']
             pid = self.constants.settings[label]['pid']
-            for i, (eta, phi, pt) in enumerate(zip(etas[pids == pid],
-                                                   phis[pids == pid],
-                                                   pts[pids == pid])):
-                e = np.argmax(self.edges_eta >= eta) - 1
-                p = np.argmax(self.edges_phi >= phi) - 1
+            for s, e, p, pt in zip(status[pids == pid],
+                                   etas[pids == pid],
+                                   phis[pids == pid],
+                                   pts[pids == pid]):
+                if s != 22:
+                    continue
+                e = np.argmax(self.edges_eta >= e) - 1
+                p = np.argmax(self.edges_phi >= p) - 1
                 labels = np.vstack((labels, [jid, e, p, pt]))
         return labels
 
