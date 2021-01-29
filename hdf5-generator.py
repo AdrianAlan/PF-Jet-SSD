@@ -6,7 +6,7 @@ import simplejson as json
 import uproot
 import warnings
 
-from uproot_methods import PtEtaPhiMassLorentzVector, TLorentzVector
+from uproot_methods import TLorentzVectorArray
 from utils import IsReadableDir
 from tqdm import tqdm
 
@@ -21,10 +21,12 @@ class PhysicsConstants():
         self.min_eta = -3
         self.max_eta = 3
         self.min_pt = {'q': 30., 'h': 200., 't': 200., 'W': 200}
-        self.settings = {'t': {'id': 4, 'pid': 6},
-                         'Z': {'id': 2, 'pid': 23},
-                         'W': {'id': 3, 'pid': 24},
-                         'H': {'id': 1, 'pid': 25}}
+        self.settings = {'t': {'id': 0, 'pid': [6],
+                               'cut_m': [105., 210.]},
+                         'V': {'id': 1, 'pid': [23, 24],
+                               'cut_m': [65., 105.]},
+                         'H': {'id': 2, 'pid': [25],
+                               'cut_m': [105., 140.]}}
 
     def get_edges_ecal(self, x, sample_events=1000):
 
@@ -64,6 +66,12 @@ class HDF5Generator:
 
         hdf5_labels = hdf5_dataset.create_dataset(
                 name='labels',
+                shape=(self.hdf5_dataset_size,),
+                maxshape=(None),
+                dtype=h5py.special_dtype(vlen=np.float32))
+
+        hdf5_baseline = hdf5_dataset.create_dataset(
+                name='baseline',
                 shape=(self.hdf5_dataset_size,),
                 maxshape=(None),
                 dtype=h5py.special_dtype(vlen=np.float32))
@@ -154,6 +162,13 @@ class HDF5Generator:
             particle_Phi_full = particle['Particle.Phi'].array()
             particle_PT_full = particle['Particle.PT'].array()
 
+            jet = file['Delphes']['JetPUPPIAK8']
+            jet_SoftDroppedJet_full = jet['JetPUPPIAK8.SoftDroppedJet'].array()
+            jet_Taus_full = jet['JetPUPPIAK8.Tau[5]'].array()
+            jet_Etas_full = jet['JetPUPPIAK8.Eta'].array()
+            jet_Phis_full = jet['JetPUPPIAK8.Phi'].array()
+            jet_PT_full = jet['JetPUPPIAK8.PT'].array()
+
             for event_number in np.arange(events[0], events[1], dtype=int):
 
                 # Get jet labels
@@ -163,15 +178,32 @@ class HDF5Generator:
                 particle_Phi = particle_Phi_full[event_number]
                 particle_PT = particle_PT_full[event_number]
 
-                labels = self.get_labels(['t', 'Z', 'W', 'Z'],
+                labels = self.get_labels(['t', 'H', 'V'],
                                          particle_Status,
                                          particle_PID,
                                          particle_Eta,
                                          particle_Phi,
                                          particle_PT)
 
-                # Flatten the labels array and write it to the labels dataset.
+                # Flatten the labels array and write it to the dataset
                 hdf5_labels[i] = labels.reshape(-1)
+
+                # Get baseline
+                jet_SDJ = jet_SoftDroppedJet_full[event_number]
+                jet_Tau = jet_Taus_full[event_number]
+                jet_Eta = jet_Etas_full[event_number]
+                jet_Phi = jet_Phis_full[event_number]
+                jet_PT = jet_PT_full[event_number]
+
+                baseline = self.get_baseline(['t', 'H', 'V'],
+                                             jet_SDJ,
+                                             jet_Tau,
+                                             jet_Eta,
+                                             jet_Phi,
+                                             jet_PT)
+
+                # Flatten the baseline array and write it to the dataset
+                hdf5_baseline[i] = baseline.reshape(-1)
 
                 # Get EFlowTrack
                 e = eFlowTrack_Eta_full[event_number]
@@ -212,6 +244,25 @@ class HDF5Generator:
                     progress_bar.update(1)
 
         hdf5_dataset.close()
+
+    def get_baseline(self, check_labels, j, taus, etas, phis, pts):
+        baselines = np.empty((0, 5))
+        m = TLorentzVectorArray.from_cartesian(j.fX, j.fY, j.fZ, j.fE).mass
+        tau21 = taus[:, 1] / taus[:, 0]
+        tau32 = taus[:, 2] / taus[:, 1]
+        for label in check_labels:
+            jid = self.constants.settings[label]['id']
+            cuts_m = self.constants.settings[label]['cut_m']
+            mask = (m > cuts_m[0]) & (m < cuts_m[1])
+            scores = tau32 if label == 't' else tau21
+            for e, p, pt, s in zip(etas[mask],
+                                   phis[mask],
+                                   pts[mask],
+                                   scores[mask]):
+                e = np.argmax(self.edges_eta >= e) - 1
+                p = np.argmax(self.edges_phi >= p) - 1
+                baselines = np.vstack((baselines, [jid, e, p, pt, s]))
+        return baselines
 
     def get_labels(self, check_labels, status, pids, etas, phis, pts):
         labels = np.empty((0, 4))
