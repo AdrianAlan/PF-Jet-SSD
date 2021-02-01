@@ -248,6 +248,9 @@ class HDF5Generator:
     def get_baseline(self, check_labels, j, taus, etas, phis, pts):
         baselines = np.empty((0, 5))
         m = TLorentzVectorArray.from_cartesian(j.fX, j.fY, j.fZ, j.fE).mass
+        m = np.nan_to_num(m)
+        taus = np.nan_to_num(taus)
+        taus = np.where(taus == 0, 10**-6, taus)
         tau21 = taus[:, 1] / taus[:, 0]
         tau32 = taus[:, 2] / taus[:, 1]
         for label in check_labels:
