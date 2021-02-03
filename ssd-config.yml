@@ -8,7 +8,15 @@ dataset:
   - /path/to/validation0
   - /path/to/validation1
   - /path/to/validation2
- test: /path/to/test
+ test:
+  - /path/to/test
+
+dataset_misc:
+ src_folder: /path/to/source/folder
+ size:
+  - 30000
+  - 12000
+  - 90000
 
 output:
  model: ./models
