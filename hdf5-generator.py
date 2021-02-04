@@ -273,10 +273,10 @@ class HDF5Generator:
         for label in check_labels:
             jid = self.constants.settings[label]['id']
             pid = self.constants.settings[label]['pid']
-            for s, e, p, pt in zip(status[pids == pid],
-                                   etas[pids == pid],
-                                   phis[pids == pid],
-                                   pts[pids == pid]):
+            for s, e, p, pt in zip(status[np.isin(pids, pid)],
+                                   etas[np.isin(pids, pid)],
+                                   phis[np.isin(pids, pid)],
+                                   pts[np.isin(pids, pid)]):
                 if s != 22:
                     continue
                 e = np.argmax(self.edges_eta >= e) - 1
