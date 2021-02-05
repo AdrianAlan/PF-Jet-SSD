@@ -34,9 +34,9 @@ training_pref:
 evaluation_pref:
  batch_size: 100
  names_classes:
-  - 'b'
-  - 'W-H'
   - 't'
+  - 'V'
+  - 'H'
  workers: 0
 
 inference_pref:
@@ -59,7 +59,7 @@ ssd_settings:
   - phi: 22
     eta: 21
  input_dimensions:
-  - 2
+  - 3
   - 340
   - 360
  n_classes: 3
