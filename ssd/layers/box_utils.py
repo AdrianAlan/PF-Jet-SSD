@@ -92,7 +92,7 @@ def match(threshold, truths, priors, variance, labels, regres, loc_t, conf_t,
         for j in range(best_prior_idx.size(0)):
             best_truth_idx[best_prior_idx[j]] = j
         matches = truths[best_truth_idx]          # Shape: [num_priors, 2]
-        conf = labels[best_truth_idx] + 1         # Shape: [num_priors]
+        conf = labels[best_truth_idx]          # Shape: [num_priors]
         regr = regres[best_truth_idx]             # Shape: [num_priors, 1]
         conf[best_truth_overlap < threshold] = 0  # label as background
         loc = encode(matches, priors, variance)

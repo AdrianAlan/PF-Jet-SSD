@@ -49,6 +49,7 @@ def execute(rank, world_size, name, quantized, dataset, output, training_pref,
                                    ssd_settings['object_size'],
                                    rank,
                                    shuffle=True,
+                                   return_pt=True,
                                    qbits=qbits)
 
     val_loader = get_data_loader(dataset['validation'][rank],
@@ -58,6 +59,7 @@ def execute(rank, world_size, name, quantized, dataset, output, training_pref,
                                  ssd_settings['object_size'],
                                  rank,
                                  shuffle=False,
+                                 return_pt=True,
                                  qbits=qbits)
 
     # Build SSD network
@@ -212,14 +214,14 @@ def execute(rank, world_size, name, quantized, dataset, output, training_pref,
 
 
 def reduce_tensor(loc, cls, reg):
-    l, c, r = loc.clone(), cls.clone(), reg.clone()
-    dist.all_reduce(l)
-    dist.all_reduce(c)
-    dist.all_reduce(r)
-    l /= int(os.environ['WORLD_SIZE'])
-    c /= int(os.environ['WORLD_SIZE'])
-    r /= int(os.environ['WORLD_SIZE'])
-    return l, c, r
+    lo, cl, rg = loc.clone(), cls.clone(), reg.clone()
+    dist.all_reduce(lo)
+    dist.all_reduce(cl)
+    dist.all_reduce(rg)
+    lo /= int(os.environ['WORLD_SIZE'])
+    cl /= int(os.environ['WORLD_SIZE'])
+    rg /= int(os.environ['WORLD_SIZE'])
+    return lo, cl, rg
 
 
 def weights_init(m):
@@ -231,6 +233,7 @@ def setup(rank, world_size):
     os.environ['MASTER_ADDR'] = '127.0.0.1'
     os.environ['MASTER_PORT'] = '11223'
     os.environ['WORLD_SIZE'] = str(world_size)
+    os.environ['RANK'] = str(rank)
     dist.init_process_group("gloo", rank=rank, world_size=world_size)
 
 
@@ -242,8 +245,8 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser('Train Single Shot Jet Detection Model')
     parser.add_argument('name', type=str, help='Model name')
-    parser.add_argument('config', type=str, action=IsValidFile,
-                        help='Path to config file')
+    parser.add_argument('-c', '--config', action=IsValidFile, type=str,
+                        help='Path to config file', default='ssd-config.yml')
     parser.add_argument('-m', '--pre-trained-model', action=IsValidFile,
                         default=None, dest='pre_trained_model_path', type=str,
                         help='Path to pre-trained model')
@@ -254,8 +257,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
     config = yaml.safe_load(open(args.config))
 
-    if not torch.cuda.is_available():
-        pass
     torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
     world_size = torch.cuda.device_count()
