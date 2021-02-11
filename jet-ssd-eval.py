@@ -10,9 +10,8 @@ from tqdm import tqdm
 from utils import *
 
 
-def execute(model, dataset, im_size, conf_threshold=0., batch_size=50,
-            overlap_threshold=.1, num_classes=3, epsilon=10**-6, top_k=200,
-            verbose=False):
+def execute(model, dataset, im_size, conf_threshold=10**-6, batch_size=50,
+            othreshold=.1, num_classes=3, epsilon=10**-6, verbose=False):
 
     results = [torch.empty(0, 2) for _ in range(num_classes)]
     deltas = torch.empty((0, 5))
@@ -26,36 +25,32 @@ def execute(model, dataset, im_size, conf_threshold=0., batch_size=50,
 
         for idx in range(batch_size):
             detections, targets = pred[idx], y[idx]
+            detections[:, :, [1, 3]] *= im_size[0]
+            detections[:, :, [2, 4]] *= im_size[1]
             targets[:, [0, 2]] *= im_size[0]
             targets[:, [1, 3]] *= im_size[1]
             all_detections = torch.empty((0, 8))
 
-            for class_id, detections in enumerate(detections[1:]):
+            for cid, dts in enumerate(detections):
 
                 # Filter detections above given threshold
-                detections = detections[detections[:, 0] > conf_threshold]
+                dts = dts[dts[:, 0] > conf_threshold]
 
-                if detections.size(0) == 0:
+                if dts.size(0) == 0:
                     continue
 
-                bboxes = detections[:, 1:5]
-                bboxes[:, [0, 2]] *= im_size[0]
-                bboxes[:, [1, 3]] *= im_size[1]
+                bboxes = dts[:, 1:5]
+                scores = dts[:, 0].unsqueeze(1)
+                regres = dts[:, 5].unsqueeze(1)
+                labels = cid*torch.ones(len(scores)).unsqueeze(1)
+                truths = torch.zeros(len(scores)).unsqueeze(1)
 
-                scores = detections[:, 0].unsqueeze(1)
-                regres = detections[:, -1].unsqueeze(1)
-                labels = (class_id)*torch.ones(len(scores)).unsqueeze(1)
-                gt = torch.zeros(len(scores)).unsqueeze(1)
-
-                # Format: [xmin, ymin, xmax, ymax, label, score, gt, m]
-                detections = torch.cat((bboxes, labels, scores, gt, regres), 1)
-                all_detections = torch.cat((all_detections, detections))
+                # Format: [xmin, ymin, xmax, ymax, label, score, truth, pt]
+                dts = torch.cat((bboxes, labels, scores, truths, regres), 1)
+                all_detections = torch.cat((all_detections, dts))
 
             # Sort by confidence
             all_detections = all_detections[(-all_detections[:, 5]).argsort()]
-
-            # Select top k predictions
-            all_detections = all_detections[:top_k]
 
             for t in targets:
                 detected = False
@@ -75,7 +70,7 @@ def execute(model, dataset, im_size, conf_threshold=0., batch_size=50,
 
                     overlap = intersection / (union + epsilon)
 
-                    if overlap < overlap_threshold:
+                    if overlap < othreshold:
                         continue
 
                     if d[4] == t[4]:
@@ -83,22 +78,20 @@ def execute(model, dataset, im_size, conf_threshold=0., batch_size=50,
                         all_detections[x][6] = 1
 
                         # Divide by 115 to get correct resolution
-                        d_eta = ((t[0]+t[2])/2 - (d[0]+d[2])/2)/115
-                        d_phi = ((t[1]+t[3])/2 - (d[1]+d[3])/2)/115
-                        d_mass = (t[5] - d[7]) / (t[5] + epsilon)
-                        deltas = torch.cat((
-                            deltas,
-                            torch.Tensor([[t[4], t[6], d_eta, d_phi, d_mass]])
-                        ))
+                        deta = ((t[0]+t[2])/2 - (d[0]+d[2])/2)/115
+                        dphi = ((t[1]+t[3])/2 - (d[1]+d[3])/2)/115
+                        dpt = 1 - d[7] / (t[5] + epsilon)
+                        dts = torch.Tensor([t[4], t[5], deta, dphi, dpt])
+                        deltas = torch.cat((deltas, dts.unsqueeze(0)))
                         break
 
                 if not detected:
-                    fn = torch.cat((t[:5], torch.Tensor([0, 1, 1])))
+                    fn = torch.cat((t[:5], torch.Tensor([0, 1, t[5]])))
                     fn = fn.unsqueeze(0)
                     all_detections = torch.cat((all_detections, fn))
 
             for c in range(num_classes):
-                cls_dets = all_detections[all_detections[:, 4] == c]
+                cls_dets = all_detections[all_detections[:, 4] == (c + 1)]
                 results[c] = torch.cat((results[c], cls_dets[:, [6, 5]]))
 
         if args.verbose:
@@ -127,8 +120,8 @@ if __name__ == '__main__':
                         help='Full Precision Network model name')
     parser.add_argument('twn', type=str,
                         help='Ternary Weight Network model name')
-    parser.add_argument('config', action=IsValidFile, type=str,
-                        help='Path to config file')
+    parser.add_argument('-c', '--config', action=IsValidFile, type=str,
+                        help='Path to config file', default='ssd-config.yml')
     parser.add_argument('-v', '--verbose', action='store_true',
                         help='Output verbosity')
     args = parser.parse_args()
@@ -149,7 +142,6 @@ if __name__ == '__main__':
     num_classes = ssd_settings['n_classes']
     ssd_settings['n_classes'] += 1
     ot = ssd_settings['overlap_threshold']
-    top_k = ssd_settings['top_k']
 
     plotting_results = []
     plotting_deltas = []
@@ -167,15 +159,14 @@ if __name__ == '__main__':
         net = net.cuda()
         net.eval()
         qbits = 8 if i else None
-        loader = get_data_loader(config['dataset']['test'], bs, workers,
+        loader = get_data_loader(config['dataset']['test'][0], bs, workers,
                                  in_dim, jet_size, return_pt=True,
                                  qbits=qbits, shuffle=False)
 
         with torch.no_grad():
             res, delta = execute(net, loader, batch_size=bs, conf_threshold=ct,
                                  im_size=in_dim[1:], num_classes=num_classes,
-                                 overlap_threshold=ot, top_k=top_k,
-                                 verbose=args.verbose)
+                                 othreshold=ot, verbose=args.verbose)
         for _, _, c, ap in res:
             logger.debug('AP for {0} jets: {1:.3f}'.format(jet_names[c], ap))
 

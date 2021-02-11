@@ -128,7 +128,6 @@ class Plotting():
 
         # Helper line c.d.
         plt.xticks(list(plt.xticks()[0]) + [self.ref_recall])
-        plt.ylim(0.5, 1)
         plt.yticks(list(set([0.5, 0.7, 0.9, 1] + ref_precisions)))
         ax.plot([0.3, 0.3], [0, np.max(ref_precisions)],
                 linestyle=self.line_styles[1],
@@ -147,10 +146,10 @@ class Plotting():
                             frameon=False)
         ax.add_artist(ab)
 
-        fig.savefig('%s/pr-curve' % self.save_dir)
+        fig.savefig('%s/precision-recall-curve' % self.save_dir)
         plt.close(fig)
 
-    def draw_loc_delta(self, data, names, width=[.1, .05, .03], nbins=15):
+    def draw_loc_delta(self, data, names, width=.1, nbins=15):
         """Plots the localization delta in eta, phi and mass"""
 
         def get_width(p, w):
@@ -167,11 +166,11 @@ class Plotting():
                 return Line2D([0], [0], color=self.colors[x][shade],
                               label=label, linestyle=self.line_styles[q])
 
-        for x, (c, w) in enumerate(zip(names, width)):
+        for x, c in enumerate(names):
 
-            for idx, l, n in [(2, r'$\sigma(\eta_{SSD}-\eta_{GT})$', 'eta'),
-                              (3, r'$\sigma(\phi_{SSD}-\phi_{GT})$', 'phi'),
-                              (4, r'$\frac{|m_{SSD}-m_{GT}|}{m_{GT}}$', 'm')]:
+            for i, l, n in [(2, r'$\sigma(\eta_{SSD}-\eta_{T})$', 'eta'),
+                            (3, r'$\sigma(\phi_{SSD}-\phi_{T})$', 'phi'),
+                            (4, r'$\frac{|Pt_{SSD}-Pt_{T}|}{Pt_{T}}$', 'pt')]:
 
                 fig, ax = plt.subplots()
                 cst_lgd = []
@@ -181,7 +180,7 @@ class Plotting():
                 for q, d in enumerate(data):
                     shade = 'shade_800' if q else 'shade_200'
                     color = self.colors[x][shade]
-                    bins, cls = [], d[d[:, 0] == x]
+                    bins, cls = [], d[d[:, 0] == x+1]
 
                     if not q:
                         min_pt, max_pt = np.min(cls[:, 1]), np.max(cls[:, 1])
@@ -191,14 +190,14 @@ class Plotting():
                     bmin = 0
                     for bmax in binning:
                         b = cls[(cls[:, 1] > bmin) & (cls[:, 1] <= bmax)]
-                        bins.append(np.abs(b[:, idx]))
+                        bins.append(np.abs(b[:, i]))
                         bmin = bmax
                     cst_lgd.append(get_line(x, shade, q, c, 0))
                     cst_lgd.append(get_line(x, shade, q, c, 1))
 
                     ax.boxplot(bins,
                                positions=binning,
-                               widths=get_width(binning, w),
+                               widths=get_width(binning, width),
                                medianprops=dict(linestyle=self.line_styles[q],
                                                 color=color),
                                meanprops=dict(marker=self.markers[q],
@@ -214,6 +213,7 @@ class Plotting():
                                showfliers=False,
                                whis=0)
 
+                ax.set_xlim([min_pt, max_pt*1.2])
                 ax.set_xscale("log")
                 ax.annotate('CMS',
                             xy=(ax.get_xlim()[0], ax.get_ylim()[1]),
