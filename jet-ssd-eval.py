@@ -106,7 +106,7 @@ def execute(model, dataset, im_size, conf_threshold=10**-6, batch_size=50,
         score = results[c][:, 1].cpu().numpy()
         p, r, _ = precision_recall_curve(truth, score)
         ap = average_precision_score(truth, score)
-        ret.append((r, p, c, ap))
+        ret.append((r[1:], p[1:], c, ap))
 
     deltas = torch.abs(deltas)
 

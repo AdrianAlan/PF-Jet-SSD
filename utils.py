@@ -118,8 +118,6 @@ class Plotting():
                         alpha=0.5,
                         color=self.color_palette['grey']['shade_500'])
 
-                recall = np.append(1, recall)
-                precision = np.append(0, precision)
                 plt.plot(recall, precision,
                          linestyle=self.line_styles[q],
                          color=self.colors[x][shade],
