@@ -77,9 +77,9 @@ def execute(model, dataset, im_size, conf_threshold=10**-6, batch_size=50,
                         detected = True
                         all_detections[x][6] = 1
 
-                        # Divide by 115 to get correct resolution
-                        deta = ((t[0]+t[2])/2 - (d[0]+d[2])/2)/115
-                        dphi = ((t[1]+t[3])/2 - (d[1]+d[3])/2)/115
+                        # Angular resolution
+                        deta = np.radians(1)*((t[0]+t[2])/2 - (d[0]+d[2])/2)
+                        dphi = np.radians(1)*((t[1]+t[3])/2 - (d[1]+d[3])/2)
                         dpt = 1 - d[7] / (t[5] + epsilon)
                         dts = torch.Tensor([t[4], t[5], deta, dphi, dpt])
                         deltas = torch.cat((deltas, dts.unsqueeze(0)))
