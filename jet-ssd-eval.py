@@ -10,9 +10,11 @@ from tqdm import tqdm
 from utils import *
 
 
-def execute(model, dataset, im_size, conf_threshold=10**-6, batch_size=50,
-            othreshold=.1, num_classes=3, epsilon=10**-6, verbose=False):
+def execute(model, dataset, im_size, obj_size, conf_threshold=10**-6,
+            batch_size=50, othreshold=.1, num_classes=3, epsilon=10**-6,
+            verbose=False):
 
+    double_jet_area = 2*obj_size**2
     results = [torch.empty(0, 2) for _ in range(num_classes)]
     deltas = torch.empty((0, 5))
 
@@ -65,9 +67,7 @@ def execute(model, dataset, im_size, conf_threshold=10**-6, batch_size=50,
                     h = torch.max(ymax - ymin, torch.tensor(0.))
                     intersection = w * h
 
-                    union = ((d[2] - d[0]) * (d[3] - d[1]) +
-                             (t[2] - t[0]) * (t[3] - t[1]) - intersection)
-
+                    union = double_jet_area - intersection
                     overlap = intersection / (union + epsilon)
 
                     if overlap < othreshold:
@@ -164,9 +164,10 @@ if __name__ == '__main__':
                                  qbits=qbits, shuffle=False)
 
         with torch.no_grad():
-            res, delta = execute(net, loader, batch_size=bs, conf_threshold=ct,
-                                 im_size=in_dim[1:], num_classes=num_classes,
-                                 othreshold=ot, verbose=args.verbose)
+            res, delta = execute(net, loader, in_dim[1:], jet_size,
+                                 conf_threshold=ct, batch_size=bs,
+                                 othreshold=ot, num_classes=num_classes,
+                                 verbose=args.verbose)
         for _, _, c, ap in res:
             logger.debug('AP for {0} jets: {1:.3f}'.format(jet_names[c], ap))
 
