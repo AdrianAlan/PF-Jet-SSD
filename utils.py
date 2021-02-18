@@ -91,9 +91,9 @@ class Plotting():
                 color=self.color_palette['grey']['shade_900'],
                 fontsize=13)
         if quantized:
-            name = 'ternary'
+            name = 'twn'
         else:
-            name = 'full'
+            name = 'fpn'
         fig.savefig('%s/loss-%s' % (self.save_dir, name))
         plt.close(fig)
 
