@@ -27,6 +27,8 @@ def execute(model, dataset, im_size, obj_size, conf_threshold=10**-6,
 
         for idx in range(batch_size):
             detections, targets = pred[idx], y[idx]
+            detections[:, :, [2, 4]] %= 1
+            targets[:, [1, 3]] %= 1
             detections[:, :, [1, 3]] *= im_size[0]
             detections[:, :, [2, 4]] *= im_size[1]
             targets[:, [0, 2]] *= im_size[0]
@@ -59,12 +61,14 @@ def execute(model, dataset, im_size, obj_size, conf_threshold=10**-6,
 
                 for x, d in enumerate(all_detections):
                     xmin = torch.max(t[0], d[0])
-                    ymin = torch.max(t[1], d[1])
+                    ymin = torch.max(t[1], d[1]) % im_size[1]
                     xmax = torch.min(t[2], d[2])
-                    ymax = torch.min(t[3], d[3])
+                    ymax = torch.min(t[3], d[3]) % im_size[1]
 
                     w = torch.max(xmax - xmin, torch.tensor(0.))
-                    h = torch.max(ymax - ymin, torch.tensor(0.))
+                    h1 = torch.max(ymax - ymin, torch.tensor(0.))
+                    h2 = torch.max((ymax-im_size[1]/2) % im_size[1] - (ymin-im_size[1]/2) % im_size[1], torch.tensor(0.))
+                    h = torch.max(h1, h2)
                     intersection = w * h
 
                     union = double_jet_area - intersection
