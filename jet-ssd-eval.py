@@ -14,7 +14,7 @@ def execute(model, dataset, im_size, obj_size, conf_threshold=10**-6,
             batch_size=50, othreshold=.1, num_classes=3, epsilon=10**-6,
             verbose=False):
 
-    double_jet_area = 2*obj_size**2
+    double_jet_area = 2*obj_size**2/(im_size[0]*im_size[1])
     results = [torch.empty(0, 2) for _ in range(num_classes)]
     deltas = torch.empty((0, 5))
 
@@ -29,10 +29,6 @@ def execute(model, dataset, im_size, obj_size, conf_threshold=10**-6,
             detections, targets = pred[idx], y[idx]
             detections[:, :, [2, 4]] %= 1
             targets[:, [1, 3]] %= 1
-            detections[:, :, [1, 3]] *= im_size[0]
-            detections[:, :, [2, 4]] *= im_size[1]
-            targets[:, [0, 2]] *= im_size[0]
-            targets[:, [1, 3]] *= im_size[1]
             all_detections = torch.empty((0, 8))
 
             for cid, dts in enumerate(detections):
@@ -61,13 +57,13 @@ def execute(model, dataset, im_size, obj_size, conf_threshold=10**-6,
 
                 for x, d in enumerate(all_detections):
                     xmin = torch.max(t[0], d[0])
-                    ymin = torch.max(t[1], d[1]) % im_size[1]
+                    ymin = torch.max(t[1], d[1]) % 1
                     xmax = torch.min(t[2], d[2])
-                    ymax = torch.min(t[3], d[3]) % im_size[1]
+                    ymax = torch.min(t[3], d[3]) % 1
 
                     w = torch.max(xmax - xmin, torch.tensor(0.))
                     h1 = torch.max(ymax - ymin, torch.tensor(0.))
-                    h2 = torch.max((ymax-im_size[1]/2) % im_size[1] - (ymin-im_size[1]/2) % im_size[1], torch.tensor(0.))
+                    h2 = torch.max((ymax-.5) % 1 - (ymin-.5) % 1, torch.tensor(0.))
                     h = torch.max(h1, h2)
                     intersection = w * h
 
@@ -86,8 +82,8 @@ def execute(model, dataset, im_size, obj_size, conf_threshold=10**-6,
                         ty = (t[1]+t[3])/2
                         dx = (d[0]+d[2])/2
                         dy = (d[1]+d[3])/2
-                        deta = np.radians(1)*(tx-dx)
-                        dphi = np.radians(1)*np.min(((ty-dy) % 1, (dy-ty) % 1))
+                        deta = np.radians(1)*im_size[0]*(tx-dx)
+                        dphi = np.radians(1)*im_size[1]*np.min(((ty-dy) % 1, (dy-ty) % 1))
                         dpt = 1 - d[7] / (t[5] + epsilon)
                         dts = torch.Tensor([t[4], t[5], deta, dphi, dpt])
                         deltas = torch.cat((deltas, dts.unsqueeze(0)))
