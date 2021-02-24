@@ -65,6 +65,7 @@ ssd_settings:
  n_classes: 3
  nms: .25
  object_size: 46.
+ max_distance: .1
  overlap_threshold: .5
  steps:
   - phi: 8

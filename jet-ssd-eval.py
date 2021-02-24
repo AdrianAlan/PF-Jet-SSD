@@ -11,10 +11,9 @@ from utils import *
 
 
 def execute(model, dataset, im_size, obj_size, conf_threshold=10**-6,
-            batch_size=50, othreshold=.1, num_classes=3, epsilon=10**-6,
+            batch_size=50, max_distance=.1, num_classes=3, epsilon=10**-6,
             verbose=False):
 
-    double_jet_area = 2*obj_size**2/(im_size[0]*im_size[1])
     results = [torch.empty(0, 2) for _ in range(num_classes)]
     deltas = torch.empty((0, 5))
 
@@ -27,8 +26,6 @@ def execute(model, dataset, im_size, obj_size, conf_threshold=10**-6,
 
         for idx in range(batch_size):
             detections, targets = pred[idx], y[idx]
-            detections[:, :, [2, 4]] %= 1
-            targets[:, [1, 3]] %= 1
             all_detections = torch.empty((0, 8))
 
             for cid, dts in enumerate(detections):
@@ -56,34 +53,24 @@ def execute(model, dataset, im_size, obj_size, conf_threshold=10**-6,
                 detected = False
 
                 for x, d in enumerate(all_detections):
-                    xmin = torch.max(t[0], d[0])
-                    ymin = torch.max(t[1], d[1]) % 1
-                    xmax = torch.min(t[2], d[2])
-                    ymax = torch.min(t[3], d[3]) % 1
+                    tx = (t[0]+t[2])/2
+                    dx = (d[0]+d[2])/2
+                    ty = (t[1]+t[3])/2
+                    dy = (d[1]+d[3])/2
+                    delta_eta = (tx-dx)
+                    delta_phi = torch.min((ty-dy) % 1, (dy-ty) % 1)
+                    distance = torch.sqrt(delta_eta**2+delta_phi**2)
 
-                    w = torch.max(xmax - xmin, torch.tensor(0.))
-                    h1 = torch.max(ymax - ymin, torch.tensor(0.))
-                    h2 = torch.max((ymax-.5) % 1 - (ymin-.5) % 1, torch.tensor(0.))
-                    h = torch.max(h1, h2)
-                    intersection = w * h
-
-                    union = double_jet_area - intersection
-                    overlap = intersection / (union + epsilon)
-
-                    if overlap < othreshold:
+                    if distance > max_distance:
                         continue
 
                     if d[4] == t[4]:
                         detected = True
                         all_detections[x][6] = 1
 
-                        # Angular resolution
-                        tx = (t[0]+t[2])/2
-                        ty = (t[1]+t[3])/2
-                        dx = (d[0]+d[2])/2
-                        dy = (d[1]+d[3])/2
-                        deta = np.radians(1)*im_size[0]*(tx-dx)
-                        dphi = np.radians(1)*im_size[1]*np.min(((ty-dy) % 1, (dy-ty) % 1))
+                        # Angular resolution and regression data
+                        deta = np.radians(1)*im_size[0]*delta_eta
+                        dphi = np.radians(1)*im_size[1]*delta_phi
                         dpt = 1 - d[7] / (t[5] + epsilon)
                         dts = torch.Tensor([t[4], t[5], deta, dphi, dpt])
                         deltas = torch.cat((deltas, dts.unsqueeze(0)))
@@ -113,6 +100,7 @@ def execute(model, dataset, im_size, obj_size, conf_threshold=10**-6,
         ret.append((r[1:], p[1:], c, ap))
 
     deltas = torch.abs(deltas)
+    torch.save(deltas, 'deltas.pt')
 
     return ret, deltas.cpu().numpy()
 
@@ -145,7 +133,7 @@ if __name__ == '__main__':
     jet_size = ssd_settings['object_size']
     num_classes = ssd_settings['n_classes']
     ssd_settings['n_classes'] += 1
-    ot = ssd_settings['overlap_threshold']
+    md = ssd_settings['max_distance']
 
     plotting_results = []
     plotting_deltas = []
@@ -170,7 +158,7 @@ if __name__ == '__main__':
         with torch.no_grad():
             res, delta = execute(net, loader, in_dim[1:], jet_size,
                                  conf_threshold=ct, batch_size=bs,
-                                 othreshold=ot, num_classes=num_classes,
+                                 max_distance=md, num_classes=num_classes,
                                  verbose=args.verbose)
         for _, _, c, ap in res:
             logger.debug('AP for {0} jets: {1:.3f}'.format(jet_names[c], ap))
