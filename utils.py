@@ -47,7 +47,6 @@ class Plotting():
         self.save_dir = save_dir
         self.line_styles = [(0, ()), (0, (2, 2))]
         self.legend = ['Full Precision Network', 'Ternary Weight Network']
-        self.loc_legend = ['Q2', r'$\mu$']
         self.ref_recall = ref_recall
 
         plt.style.use('./plots/ssdjet.mplstyle')
@@ -147,90 +146,84 @@ class Plotting():
         fig.savefig('%s/precision-recall-curve' % self.save_dir)
         plt.close(fig)
 
-    def draw_loc_delta(self, data, names, width=.1, nbins=15):
-        """Plots the localization delta in eta, phi and mass"""
+    def draw_loc_delta(self, data, names, nbins=15):
+        """Plots the localization and regression error"""
+        # Fix binning across classes
+        min_pt, max_pt = np.min(data[0][:, 1]), np.max(data[0][:, 1])
+        binning = np.logspace(np.log10(min_pt), np.log10(max_pt), nbins)[1:]
 
-        def get_width(p, w):
-            return 10**(np.log10(p)+w/2.)-10**(np.log10(p)-w/2.)
+        # Fix legend helpers
+        legend_helper_network = []
+        for i, name in enumerate(self.legend):
+            legend_helper_network.append(Line2D([], [],
+                                                linewidth=0,
+                                                markersize=4,
+                                                marker=self.markers[i],
+                                                color='black',
+                                                label=name))
 
-        def get_line(x, shade, q, c, mean):
-            label = '{0}: {1} jets, {2}'.format(self.legend[q], c,
-                                                self.loc_legend[mean])
-            if mean:
-                return Line2D([0], [0], color=self.colors[x][shade],
-                              linestyle=self.line_styles[q], label=label,
-                              marker=self.markers[q], lw=0, markersize=4)
-            else:
-                return Line2D([0], [0], color=self.colors[x][shade],
-                              label=label, linestyle=self.line_styles[q])
+        legend_helper_type = []
+        for i, jet in enumerate(names):
+            legend_helper_type.append(Line2D([], [],
+                                             linewidth=2,
+                                             color=self.colors[i]['shade_800'],
+                                             label='%s jets' % jet))
 
-        for x, c in enumerate(names):
+        for i, l, n in [(2, r'$\mu|\eta_{SSD}-\eta_{GT}|$ [rad]', 'eta'),
+                        (3, r'$\mu|\phi_{SSD}-\phi_{GT}|$ [rad]', 'phi'),
+                        (4, r'$\mu\frac{|Pt_{SSD}-Pt_{GT}|}{Pt_{GT}}$', 'pt')]:
 
-            for i, l, n in [(2, r'$\sigma(\eta_{SSD}-\eta_{T})$', 'eta'),
-                            (3, r'$\sigma(\phi_{SSD}-\phi_{T})$', 'phi'),
-                            (4, r'$\frac{|Pt_{SSD}-Pt_{T}|}{Pt_{T}}$', 'pt')]:
+            fig, ax = plt.subplots()
+            plt.xlabel('$p_T$ [GeV]', horizontalalignment='right', x=1.0)
+            plt.ylabel(l, horizontalalignment='right', y=1.0)
 
-                fig, ax = plt.subplots()
-                cst_lgd = []
-                plt.xlabel('$p_T$ [GeV]', horizontalalignment='right', x=1.0)
-                plt.ylabel(l, horizontalalignment='right', y=1.0)
+            for x, _ in enumerate(names):
 
                 for q, d in enumerate(data):
                     shade = 'shade_800' if q else 'shade_200'
                     color = self.colors[x][shade]
-                    bins, cls = [], d[d[:, 0] == x+1]
-
-                    if not q:
-                        min_pt, max_pt = np.min(cls[:, 1]), np.max(cls[:, 1])
-                        binning = np.logspace(np.log10(min_pt),
-                                              np.log10(max_pt), nbins)[1:]
-
-                    bmin = 0
+                    cls = d[d[:, 0] == x+1]
+                    bmin, v = 0, []
                     for bmax in binning:
                         b = cls[(cls[:, 1] > bmin) & (cls[:, 1] <= bmax)]
-                        bins.append(np.abs(b[:, i]))
+                        v.append(np.mean(np.abs(b[:, i])))
                         bmin = bmax
-                    cst_lgd.append(get_line(x, shade, q, c, 0))
-                    cst_lgd.append(get_line(x, shade, q, c, 1))
+                    ax.scatter(binning,
+                               v,
+                               color=color,
+                               marker=self.markers[q],
+                               s=4)
 
-                    ax.boxplot(bins,
-                               positions=binning,
-                               widths=get_width(binning, width),
-                               medianprops=dict(linestyle=self.line_styles[q],
-                                                color=color),
-                               meanprops=dict(marker=self.markers[q],
-                                              markeredgecolor=color,
-                                              markerfacecolor=color,
-                                              markersize=4),
-                               sym='',
-                               showmeans=True,
-                               notch=False,
-                               showbox=False,
-                               showcaps=False,
-                               meanline=False,
-                               showfliers=False,
-                               whis=0)
+            ax.set_xlim([min_pt, max_pt*1.2])
 
-                ax.set_xlim([min_pt, max_pt*1.2])
-                ax.set_xscale("log")
-                ax.annotate('CMS',
-                            xy=(ax.get_xlim()[0], ax.get_ylim()[1]),
-                            transform=ax.transAxes,
-                            horizontalalignment='left',
-                            color=self.color_palette['grey']['shade_900'],
-                            fontsize=13,
-                            weight='bold')
+            # Change to log scale
+            ax.set_yscale("log")
+            ax.set_xscale("log")
 
-                ab = AnnotationBbox(self.get_logo(),
-                                    xy=(ax.get_xlim()[0], ax.get_ylim()[1]),
-                                    box_alignment=(-0.5, 0.3),
-                                    frameon=False)
-                ax.add_artist(ab)
-                ax.legend(handles=cst_lgd, loc='upper left',
-                          bbox_to_anchor=(0, -0.1))
+            # Add legends
+            plt.gca().add_artist(plt.legend(handles=legend_helper_type,
+                                            loc='upper left',
+                                            bbox_to_anchor=(0, -0.1)))
+            plt.gca().add_artist(plt.legend(handles=legend_helper_network,
+                                            loc='upper left',
+                                            bbox_to_anchor=(0.2, -0.1)))
 
-                fig.savefig('%s/delta-%s-%s' % (self.save_dir, c, n))
-                plt.close(fig)
+            ax.annotate('CMS',
+                        xy=(ax.get_xlim()[0], ax.get_ylim()[1]),
+                        transform=ax.transAxes,
+                        horizontalalignment='left',
+                        color=self.color_palette['grey']['shade_900'],
+                        fontsize=13,
+                        weight='bold')
+
+            ab = AnnotationBbox(self.get_logo(),
+                                xy=(ax.get_xlim()[0], ax.get_ylim()[1]),
+                                box_alignment=(-0.5, 0.3),
+                                frameon=False)
+            ax.add_artist(ab)
+
+            fig.savefig('%s/delta-%s' % (self.save_dir, n))
+            plt.close(fig)
 
     def draw_errorbar(self, x, y, e, ylabel, name):
         """Plots errobars as a function of batch size"""
