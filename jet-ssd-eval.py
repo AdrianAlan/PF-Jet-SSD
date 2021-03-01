@@ -15,17 +15,16 @@ def execute(model, dataset, im_size, obj_size, conf_threshold=10**-6,
             verbose=False):
 
     results = [torch.empty(0, 2) for _ in range(num_classes)]
-    deltas = torch.empty((0, 5))
+    deltas, deltas_baseline = torch.empty((0, 5)), torch.empty((0, 5))
 
     if args.verbose:
         progress_bar = tqdm(total=len(dataset), desc='Evaluating events')
 
-    for X, y in dataset:
+    for X, y, base in dataset:
 
         pred = model(X).data
-
         for idx in range(batch_size):
-            detections, targets = pred[idx], y[idx]
+            detections, targets, all_baselines = pred[idx], y[idx], base[idx]
             all_detections = torch.empty((0, 8))
 
             for cid, dts in enumerate(detections):
@@ -48,14 +47,15 @@ def execute(model, dataset, im_size, obj_size, conf_threshold=10**-6,
 
             # Sort by confidence
             all_detections = all_detections[(-all_detections[:, 5]).argsort()]
+            all_baselines = all_baselines[(all_baselines[:, 5]).argsort()]
 
             for t in targets:
-                detected = False
+                detected, dbaseline = False, False
+                tx = (t[0]+t[2])/2
+                ty = (t[1]+t[3])/2
 
                 for x, d in enumerate(all_detections):
-                    tx = (t[0]+t[2])/2
                     dx = (d[0]+d[2])/2
-                    ty = (t[1]+t[3])/2
                     dy = (d[1]+d[3])/2
                     delta_eta = (tx-dx)
                     delta_phi = torch.min((ty-dy) % 1, (dy-ty) % 1)
@@ -76,10 +76,38 @@ def execute(model, dataset, im_size, obj_size, conf_threshold=10**-6,
                         deltas = torch.cat((deltas, dts.unsqueeze(0)))
                         break
 
+                for x, b in enumerate(all_baselines):
+                    bx = (b[0]+b[2])/2
+                    by = (b[1]+b[3])/2
+                    delta_eta = (tx-bx)
+                    delta_phi = torch.min((ty-by) % 1, (dy-by) % 1)
+                    distance = torch.sqrt(delta_eta**2+delta_phi**2)
+
+                    if distance > max_distance:
+                        continue
+
+                    if b[4] == t[4]:
+                        dbaseline = True
+                        all_baselines[x][6] = 1
+
+                        # Angular resolution and regression data
+                        deta = np.radians(1)*im_size[0]*delta_eta
+                        dphi = np.radians(1)*im_size[1]*delta_phi
+                        dpt = 1 - b[7] / (t[5] + epsilon)
+                        dts = torch.Tensor([b[4], b[5], deta, dphi, dpt])
+                        deltas_baseline = torch.cat((deltas_baseline,
+                                                     dts.unsqueeze(0)))
+                        break
+
                 if not detected:
                     fn = torch.cat((t[:5], torch.Tensor([0, 1, t[5]])))
                     fn = fn.unsqueeze(0)
                     all_detections = torch.cat((all_detections, fn))
+
+                if not dbaseline:
+                    fn = torch.cat((t[:5], torch.Tensor([0, 1, t[5]])))
+                    fn = fn.unsqueeze(0)
+                    all_baselines = torch.cat((all_baselines, fn))
 
             for c in range(num_classes):
                 cls_dets = all_detections[all_detections[:, 4] == (c + 1)]
@@ -98,9 +126,6 @@ def execute(model, dataset, im_size, obj_size, conf_threshold=10**-6,
         p, r, _ = precision_recall_curve(truth, score)
         ap = average_precision_score(truth, score)
         ret.append((r[1:], p[1:], c, ap))
-
-    deltas = torch.abs(deltas)
-    torch.save(deltas, 'deltas.pt')
 
     return ret, deltas.cpu().numpy()
 
@@ -152,8 +177,8 @@ if __name__ == '__main__':
         net.eval()
         qbits = 8 if i else None
         loader = get_data_loader(config['dataset']['test'][0], bs, workers,
-                                 in_dim, jet_size, return_pt=True,
-                                 qbits=qbits, shuffle=False)
+                                 in_dim, jet_size, return_baseline=True,
+                                 return_pt=True, qbits=qbits, shuffle=False)
 
         with torch.no_grad():
             res, delta = execute(net, loader, in_dim[1:], jet_size,

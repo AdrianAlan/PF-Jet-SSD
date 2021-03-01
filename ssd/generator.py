@@ -8,7 +8,7 @@ from ssd import qutils
 class CalorimeterJetDataset(torch.utils.data.Dataset):
 
     def __init__(self, rank, hdf5_source_path, input_dimensions, jet_size,
-                 qbits=None, return_pt=False):
+                 qbits=None, return_baseline=False, return_pt=False):
         """Generator for calorimeter and jet data"""
 
         self.rank = rank
@@ -19,6 +19,7 @@ class CalorimeterJetDataset(torch.utils.data.Dataset):
         self.size = jet_size / 2
         self.qbits = qbits
         self.return_pt = return_pt
+        self.return_baseline = return_baseline
 
     def __getitem__(self, index):
 
@@ -60,6 +61,11 @@ class CalorimeterJetDataset(torch.utils.data.Dataset):
         labels_raw = tcuda.FloatTensor(self.labels[index], device=self.rank)
         labels_processed = self.process_labels(labels_raw, scaler)
 
+        if self.return_baseline:
+            base_raw = tcuda.FloatTensor(self.base[index], device=self.rank)
+            base_processed = self.process_baseline(base_raw, scaler)
+            return calorimeter, labels_processed, base_processed
+
         return calorimeter, labels_processed
 
     def __len__(self):
@@ -85,6 +91,7 @@ class CalorimeterJetDataset(torch.utils.data.Dataset):
         self.eFNHadron_ET = self.hdf5_dataset['EFlowNeutralHadron_ET']
 
         self.labels = self.hdf5_dataset['labels']
+        self.base = self.hdf5_dataset['baseline']
 
         self.dataset_size = len(self.labels)
 
@@ -122,6 +129,28 @@ class CalorimeterJetDataset(torch.utils.data.Dataset):
                                                             self.width,
                                                             self.height]))
         return pixels.to_dense(), scaler
+
+    def process_baseline(self, base_raw, scaler):
+        base_reshaped = base_raw.reshape(-1, 5)
+        base = torch.empty_like(base_reshaped)
+
+        # Set fractional coordinates
+        base[:, 0] = (base_reshaped[:, 1] - self.size) / float(self.width)
+        base[:, 1] = (base_reshaped[:, 2] - self.size) / float(self.height)
+        base[:, 2] = (base_reshaped[:, 1] + self.size) / float(self.width)
+        base[:, 3] = (base_reshaped[:, 2] + self.size) / float(self.height)
+
+        # Set class label
+        base[:, 4] = base_reshaped[:, 0] + 1
+
+        score = base_reshaped[:, 4].unsqueeze(1)
+        truth = torch.zeros_like(score)
+        pt = base_reshaped[:, 3].unsqueeze(1) / scaler
+        base = torch.cat((base, score), 1)
+        base = torch.cat((base, truth), 1)
+        base = torch.cat((base, pt), 1)
+
+        return base
 
     def process_labels(self, labels_raw, scaler):
         labels_reshaped = labels_raw.reshape(-1, 4)

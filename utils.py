@@ -328,15 +328,18 @@ def collate_fn(batch):
     transposed_data = list(zip(*batch))
     inp = torch.stack(transposed_data[0], 0)
     tgt = list(transposed_data[1])
-    return inp, tgt
+    if len(transposed_data) < 3:
+        return inp, tgt
+    bsl = list(transposed_data[2])
+    return inp, tgt, bsl
 
 
 def get_data_loader(hdf5_source_path, batch_size, num_workers,
                     input_dimensions, jet_size, rank=0, shuffle=True,
-                    return_pt=False, qbits=None):
+                    return_baseline=False, return_pt=False, qbits=None):
     dataset = CalorimeterJetDataset(rank, hdf5_source_path, input_dimensions,
-                                    jet_size, return_pt=return_pt,
-                                    qbits=qbits)
+                                    jet_size, return_baseline=return_baseline,
+                                    return_pt=return_pt, qbits=qbits)
     return DataLoader(dataset,
                       batch_size=batch_size,
                       collate_fn=collate_fn,
