@@ -127,7 +127,7 @@ def execute(model, dataset, im_size, obj_size, conf_threshold=10**-6,
         ap = average_precision_score(truth, score)
         ret.append((r[1:], p[1:], c, ap))
 
-    return ret, deltas.cpu().numpy()
+    return ret, deltas.cpu().numpy(), deltas_baseline.cpu().numpy()
 
 
 if __name__ == '__main__':
@@ -181,10 +181,11 @@ if __name__ == '__main__':
                                  return_pt=True, qbits=qbits, shuffle=False)
 
         with torch.no_grad():
-            res, delta = execute(net, loader, in_dim[1:], jet_size,
-                                 conf_threshold=ct, batch_size=bs,
-                                 max_distance=md, num_classes=num_classes,
-                                 verbose=args.verbose)
+            res, delta, baselines = execute(net, loader, in_dim[1:], jet_size,
+                                            conf_threshold=ct, batch_size=bs,
+                                            max_distance=md,
+                                            num_classes=num_classes,
+                                            verbose=args.verbose)
         for _, _, c, ap in res:
             logger.debug('AP for {0} jets: {1:.3f}'.format(jet_names[c], ap))
 
@@ -199,4 +200,7 @@ if __name__ == '__main__':
 
     plot = Plotting(save_dir=config['output']['plots'])
     plot.draw_precision_recall(plotting_results, jet_names)
-    plot.draw_loc_delta(plotting_deltas, jet_names)
+    plot.draw_loc_delta(plotting_deltas[0],
+                        plotting_deltas[1],
+                        baselines,
+                        jet_names)

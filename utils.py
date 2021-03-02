@@ -45,8 +45,11 @@ class Plotting():
     def __init__(self, save_dir='./plots', ref_recall=0.3):
 
         self.save_dir = save_dir
-        self.line_styles = [(0, ()), (0, (2, 2))]
-        self.legend = ['Full Precision Network', 'Ternary Weight Network']
+        self.line_styles = [(0, (2, 2)), (0, ()), (0, (2, 2))]
+        self.legend = ['Full Precision Network',
+                       'Ternary Weight Network',
+                       r'Baseline: m, $\tau$']
+        self.shades = ['shade_400', 'shade_900', 'shade_200']
         self.ref_recall = ref_recall
 
         plt.style.use('./plots/ssdjet.mplstyle')
@@ -58,7 +61,7 @@ class Plotting():
                        self.color_palette['red'],
                        self.color_palette['green'],
                        self.color_palette['yellow']]
-        self.markers = ["v", "D"]
+        self.markers = ["o", "v", "s"]
 
     def get_logo(self):
         return OffsetImage(plt.imread('./plots/hls4mllogo.jpg', format='jpg'),
@@ -146,10 +149,11 @@ class Plotting():
         fig.savefig('%s/precision-recall-curve' % self.save_dir)
         plt.close(fig)
 
-    def draw_loc_delta(self, data, names, nbins=15):
+    def draw_loc_delta(self, results_fp, results_tp, results_base,
+                       jet_names, nbins=12):
         """Plots the localization and regression error"""
         # Fix binning across classes
-        min_pt, max_pt = np.min(data[0][:, 1]), np.max(data[0][:, 1])
+        min_pt, max_pt = np.min(results_fp[:, 1]), np.max(results_fp[:, 1])
         binning = np.logspace(np.log10(min_pt), np.log10(max_pt), nbins)[1:]
 
         # Fix legend helpers
@@ -157,13 +161,13 @@ class Plotting():
         for i, name in enumerate(self.legend):
             legend_helper_network.append(Line2D([], [],
                                                 linewidth=0,
-                                                markersize=4,
+                                                markersize=5,
                                                 marker=self.markers[i],
                                                 color='black',
                                                 label=name))
 
         legend_helper_type = []
-        for i, jet in enumerate(names):
+        for i, jet in enumerate(jet_names):
             legend_helper_type.append(Line2D([], [],
                                              linewidth=2,
                                              color=self.colors[i]['shade_800'],
@@ -177,22 +181,26 @@ class Plotting():
             plt.xlabel('$p_T$ [GeV]', horizontalalignment='right', x=1.0)
             plt.ylabel(l, horizontalalignment='right', y=1.0)
 
-            for x, _ in enumerate(names):
+            for x, _ in enumerate(jet_names):
 
-                for q, d in enumerate(data):
-                    shade = 'shade_800' if q else 'shade_200'
-                    color = self.colors[x][shade]
+                for q, d in enumerate([results_fp, results_tp, results_base]):
+                    color = self.colors[x][self.shades[q]]
                     cls = d[d[:, 0] == x+1]
                     bmin, v = 0, []
                     for bmax in binning:
                         b = cls[(cls[:, 1] > bmin) & (cls[:, 1] <= bmax)]
-                        v.append(np.mean(np.abs(b[:, i])))
+                        absb = np.abs(b[:, i])
+                        if len(absb):
+                            v.append(np.mean(absb))
+                        else:
+                            v.append(np.nan)
                         bmin = bmax
-                    ax.scatter(binning,
-                               v,
-                               color=color,
-                               marker=self.markers[q],
-                               s=4)
+
+                    ax.plot(binning, v,
+                            color=color,
+                            marker=self.markers[q],
+                            linestyle=self.line_styles[q],
+                            markersize=5)
 
             ax.set_xlim([min_pt, max_pt*1.2])
 
