@@ -99,7 +99,8 @@ class Plotting():
         fig.savefig('%s/loss-%s' % (self.save_dir, name))
         plt.close(fig)
 
-    def draw_precision_recall(self, data, names):
+    def draw_precision_recall(self, results_fp, results_tp, results_base,
+                              jet_names):
         """Plots the precision recall curve"""
 
         fig, ax = plt.subplots()
@@ -107,9 +108,8 @@ class Plotting():
         plt.ylabel("Precision (PPV)", horizontalalignment='right', y=1.0)
         ref_precisions = []
 
-        for q, data_model in enumerate(data):
-            shade = 'shade_800' if q else 'shade_500'
-            for x, (recall, precision, c, ap) in enumerate(data_model):
+        for i, data_model in enumerate([results_fp, results_tp, results_base]):
+            for x, (recall, precision, ap) in enumerate(data_model):
                 # Helper line
                 ref_precision = np.round(
                     precision[(np.abs(recall - self.ref_recall)).argmin()], 2)
@@ -121,10 +121,10 @@ class Plotting():
                         color=self.color_palette['grey']['shade_500'])
 
                 plt.plot(recall, precision,
-                         linestyle=self.line_styles[q],
-                         color=self.colors[x][shade],
+                         linestyle=self.line_styles[i],
+                         color=self.colors[x][self.shades[i]],
                          label='{0}: {1} jets, AP: {2:.3f}'.format(
-                                 self.legend[q], names[c], ap))
+                                 self.legend[i], jet_names[x], ap))
 
         # Helper line c.d.
         plt.xticks(list(plt.xticks()[0]) + [self.ref_recall])

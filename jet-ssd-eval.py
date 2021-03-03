@@ -15,6 +15,7 @@ def execute(model, dataset, im_size, obj_size, conf_threshold=10**-6,
             verbose=False):
 
     results = [torch.empty(0, 2) for _ in range(num_classes)]
+    results_baseline = [torch.empty(0, 2) for _ in range(num_classes)]
     deltas, deltas_baseline = torch.empty((0, 5)), torch.empty((0, 5))
 
     if args.verbose:
@@ -113,21 +114,31 @@ def execute(model, dataset, im_size, obj_size, conf_threshold=10**-6,
                 cls_dets = all_detections[all_detections[:, 4] == (c + 1)]
                 results[c] = torch.cat((results[c], cls_dets[:, [6, 5]]))
 
+                cls_dets = all_baselines[all_baselines[:, 4] == (c + 1)]
+                results_baseline[c] = torch.cat((results_baseline[c],
+                                                 cls_dets[:, [6, 5]]))
+
         if args.verbose:
             progress_bar.update(1)
 
     if args.verbose:
         progress_bar.close()
 
-    ret = []
+    ret, ret2 = [], []
     for c in range(num_classes):
         truth = results[c][:, 0].cpu().numpy()
         score = results[c][:, 1].cpu().numpy()
         p, r, _ = precision_recall_curve(truth, score)
         ap = average_precision_score(truth, score)
-        ret.append((r[1:], p[1:], c, ap))
+        ret.append((r[1:], p[1:], ap))
 
-    return ret, deltas.cpu().numpy(), deltas_baseline.cpu().numpy()
+        truth = results_baseline[c][:, 0].cpu().numpy()
+        score = results_baseline[c][:, 1].cpu().numpy()
+        p, r, _ = precision_recall_curve(truth, score)
+        ap = average_precision_score(truth, score)
+        ret2.append((r[1:], p[1:], ap))
+
+    return ret, ret2, deltas.cpu().numpy(), deltas_baseline.cpu().numpy()
 
 
 if __name__ == '__main__':
@@ -181,15 +192,19 @@ if __name__ == '__main__':
                                  return_pt=True, qbits=qbits, shuffle=False)
 
         with torch.no_grad():
-            res, delta, baselines = execute(net, loader, in_dim[1:], jet_size,
-                                            conf_threshold=ct, batch_size=bs,
-                                            max_distance=md,
-                                            num_classes=num_classes,
-                                            verbose=args.verbose)
-        for _, _, c, ap in res:
-            logger.debug('AP for {0} jets: {1:.3f}'.format(jet_names[c], ap))
+            results, base, delta, baselines = execute(net,
+                                                      loader,
+                                                      in_dim[1:],
+                                                      jet_size,
+                                                      conf_threshold=ct,
+                                                      batch_size=bs,
+                                                      max_distance=md,
+                                                      num_classes=num_classes,
+                                                      verbose=args.verbose)
+        for x, (_, _, ap) in enumerate(results):
+            logger.debug('AP for {0} jets: {1:.3f}'.format(jet_names[x], ap))
 
-        plotting_results.append(res)
+        plotting_results.append(results)
         plotting_deltas.append(delta)
 
         dummy_input = torch.unsqueeze(torch.randn(in_dim), 0)
@@ -199,7 +214,10 @@ if __name__ == '__main__':
         logger.debug('Total network parameters: {0}'.format(params))
 
     plot = Plotting(save_dir=config['output']['plots'])
-    plot.draw_precision_recall(plotting_results, jet_names)
+    plot.draw_precision_recall(plotting_results[0],
+                               plotting_results[1],
+                               base,
+                               jet_names)
     plot.draw_loc_delta(plotting_deltas[0],
                         plotting_deltas[1],
                         baselines,
