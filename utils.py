@@ -115,7 +115,7 @@ class Plotting():
                     precision[(np.abs(recall - self.ref_recall)).argmin()], 2)
                 ref_precisions.append(ref_precision)
                 ax.plot([0, 0.3], [ref_precision, ref_precision],
-                        linestyle=self.line_styles[1],
+                        linestyle=self.line_styles[0],
                         linewidth=0.8,
                         alpha=0.5,
                         color=self.color_palette['grey']['shade_500'])
@@ -128,11 +128,8 @@ class Plotting():
 
         # Helper line c.d.
         plt.xticks(list(plt.xticks()[0]) + [self.ref_recall])
-        plt.yticks(list(set([0.5, 0.7, 0.9, 1] + ref_precisions)))
-        ax.plot([0.3, 0.3], [0, np.max(ref_precisions)],
-                linestyle=self.line_styles[1],
-                alpha=0.5,
-                color=self.color_palette['grey']['shade_500'])
+        plt.yticks(list(set([0.1, 0.3, 0.5, 0.7, 0.9, 1])))
+        plt.xlim(0,1)
 
         ax.legend(loc='upper center', bbox_to_anchor=(0.25, -0.1))
 
