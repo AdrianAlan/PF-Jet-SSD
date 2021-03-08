@@ -114,7 +114,7 @@ class Plotting():
                 ref_precision = np.round(
                     precision[(np.abs(recall - self.ref_recall)).argmin()], 2)
                 ref_precisions.append(ref_precision)
-                ax.plot([0, 0.3], [ref_precision, ref_precision],
+                ax.plot([0, self.ref_recall], [ref_precision, ref_precision],
                         linestyle=self.line_styles[0],
                         linewidth=0.8,
                         alpha=0.5,
@@ -129,7 +129,6 @@ class Plotting():
         # Helper line c.d.
         plt.xticks(list(plt.xticks()[0]) + [self.ref_recall])
         plt.yticks(list(set([0.1, 0.3, 0.5, 0.7, 0.9, 1])))
-        plt.xlim(0,1)
 
         ax.legend(loc='upper center', bbox_to_anchor=(0.25, -0.1))
 
@@ -143,7 +142,49 @@ class Plotting():
                             frameon=False)
         ax.add_artist(ab)
 
+        ax.set_xlim(0, 1)
         fig.savefig('%s/precision-recall-curve' % self.save_dir)
+
+        plt.close(fig)
+        self.draw_precision_recall_zoom(results_fp, results_tp, results_base,
+                                        jet_names)
+
+    def draw_precision_recall_zoom(self, results_fp, results_tp, results_base,
+                                   jet_names):
+        """Plots the precision recall curve"""
+
+        fig, ax = plt.subplots()
+        plt.xlabel("Recall (TPR)", horizontalalignment='right', x=1.0)
+        plt.ylabel("Precision (PPV)", horizontalalignment='right', y=1.0)
+        ref_precisions = []
+
+        for i, data_model in enumerate([results_fp, results_tp, results_base]):
+            for x, (recall, precision, ap) in enumerate(data_model):
+                plt.plot(recall, 1-precision,
+                         linestyle=self.line_styles[i],
+                         color=self.colors[x][self.shades[i]],
+                         label='{0}: {1} jets, AP: {2:.3f}'.format(
+                                 self.legend[i], jet_names[x], ap))
+
+        plt.xticks(list(plt.xticks()[0]) + [self.ref_recall])
+        ax.set_xlim(0, self.ref_recall)
+        ax.set_yscale("log")
+        plt.gca().invert_yaxis()
+        plt.gca().set_yticklabels(1-plt.gca().get_yticks())
+
+        ax.legend(loc='upper center', bbox_to_anchor=(0.25, -0.1))
+
+        ax.text(0, 1.02, 'CMS',
+                weight='bold',
+                transform=ax.transAxes,
+                color=self.color_palette['grey']['shade_900'],
+                fontsize=13)
+
+        ab = AnnotationBbox(self.get_logo(), [0, 1], xybox=(0.12, 1.085),
+                            frameon=False)
+        ax.add_artist(ab)
+
+        fig.savefig('%s/precision-recall-curve-zoom' % self.save_dir)
         plt.close(fig)
 
     def draw_loc_delta(self, results_fp, results_tp, results_base,
