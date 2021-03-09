@@ -11,7 +11,7 @@ import torch
 import torch.nn as nn
 
 from matplotlib.lines import Line2D
-from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+from matplotlib.offsetbox import OffsetImage
 from ssd.generator import CalorimeterJetDataset
 from ssd.layers import *
 from torch.utils.data import DataLoader
@@ -138,10 +138,6 @@ class Plotting():
                 color=self.color_palette['grey']['shade_900'],
                 fontsize=13)
 
-        ab = AnnotationBbox(self.get_logo(), [0, 1], xybox=(0.12, 1.085),
-                            frameon=False)
-        ax.add_artist(ab)
-
         ax.set_xlim(0, 1)
         fig.savefig('%s/precision-recall-curve' % self.save_dir)
 
@@ -179,10 +175,6 @@ class Plotting():
                 transform=ax.transAxes,
                 color=self.color_palette['grey']['shade_900'],
                 fontsize=13)
-
-        ab = AnnotationBbox(self.get_logo(), [0, 1], xybox=(0.12, 1.085),
-                            frameon=False)
-        ax.add_artist(ab)
 
         fig.savefig('%s/precision-recall-curve-zoom' % self.save_dir)
         plt.close(fig)
@@ -262,12 +254,6 @@ class Plotting():
                         fontsize=13,
                         weight='bold')
 
-            ab = AnnotationBbox(self.get_logo(),
-                                xy=(ax.get_xlim()[0], ax.get_ylim()[1]),
-                                box_alignment=(-0.5, 0.3),
-                                frameon=False)
-            ax.add_artist(ab)
-
             fig.savefig('%s/delta-%s' % (self.save_dir, n))
             plt.close(fig)
 
@@ -293,13 +279,6 @@ class Plotting():
 
         plt.gcf().canvas.draw()
         bbox = cms.get_window_extent().inverse_transformed(plt.gca().transData)
-        ab = AnnotationBbox(self.get_logo(), (x[0], y[0]),
-                            xybox=(1.1*bbox.x1, (bbox.y1-bbox.y0)/2 + bbox.y0),
-                            xycoords='data',
-                            boxcoords='data',
-                            box_alignment=(0., 0.5),
-                            frameon=False)
-        ax.add_artist(ab)
         fig.savefig('%s/inference-%s' % (self.save_dir, name))
         plt.close(fig)
 
