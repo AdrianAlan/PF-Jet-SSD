@@ -87,11 +87,6 @@ class Plotting():
                      color=color['shade_400'])
 
         ax.legend()
-        ax.text(0, 1.02, 'CMS',
-                weight='bold',
-                transform=ax.transAxes,
-                color=self.color_palette['grey']['shade_900'],
-                fontsize=13)
         if quantized:
             name = 'twn'
         else:
@@ -132,12 +127,6 @@ class Plotting():
 
         ax.legend(loc='upper center', bbox_to_anchor=(0.25, -0.1))
 
-        ax.text(0, 1.02, 'CMS',
-                weight='bold',
-                transform=ax.transAxes,
-                color=self.color_palette['grey']['shade_900'],
-                fontsize=13)
-
         ax.set_xlim(0, 1)
         fig.savefig('%s/precision-recall-curve' % self.save_dir)
 
@@ -169,12 +158,6 @@ class Plotting():
         plt.gca().set_yticklabels(1-plt.gca().get_yticks())
 
         ax.legend(loc='upper center', bbox_to_anchor=(0.25, -0.1))
-
-        ax.text(0, 1.02, 'CMS',
-                weight='bold',
-                transform=ax.transAxes,
-                color=self.color_palette['grey']['shade_900'],
-                fontsize=13)
 
         fig.savefig('%s/precision-recall-curve-zoom' % self.save_dir)
         plt.close(fig)
@@ -246,14 +229,6 @@ class Plotting():
                                             loc='upper left',
                                             bbox_to_anchor=(0.2, -0.1)))
 
-            ax.annotate('CMS',
-                        xy=(ax.get_xlim()[0], ax.get_ylim()[1]),
-                        transform=ax.transAxes,
-                        horizontalalignment='left',
-                        color=self.color_palette['grey']['shade_900'],
-                        fontsize=13,
-                        weight='bold')
-
             fig.savefig('%s/delta-%s' % (self.save_dir, n))
             plt.close(fig)
 
@@ -270,15 +245,6 @@ class Plotting():
                     elinewidth=1,
                     markersize=5,
                     color=self.colors[0]['shade_500'])
-
-        cms = ax.text(0, 1.02, 'CMS',
-                      weight='bold',
-                      transform=ax.transAxes,
-                      color=self.color_palette['grey']['shade_900'],
-                      fontsize=13)
-
-        plt.gcf().canvas.draw()
-        bbox = cms.get_window_extent().inverse_transformed(plt.gca().transData)
         fig.savefig('%s/inference-%s' % (self.save_dir, name))
         plt.close(fig)
 
