@@ -12,6 +12,7 @@ import torch.nn as nn
 
 from matplotlib.lines import Line2D
 from matplotlib.offsetbox import OffsetImage
+from sklearn.metrics import average_precision_score, precision_recall_curve
 from ssd.generator import CalorimeterJetDataset
 from ssd.layers import *
 from torch.utils.data import DataLoader
@@ -101,36 +102,37 @@ class Plotting():
         fig, ax = plt.subplots()
         plt.xlabel("Recall (TPR)", horizontalalignment='right', x=1.0)
         plt.ylabel("Precision (PPV)", horizontalalignment='right', y=1.0)
-        ref_precisions = []
 
-        for i, data_model in enumerate([results_fp, results_tp, results_base]):
-            for x, (recall, precision, ap) in enumerate(data_model):
+        for i, results in enumerate([results_fp, results_tp, results_base]):
+            for x, name in enumerate(jet_names):
+                truth = results[x][:, 0].cpu().numpy()
+                score = results[x][:, 1].cpu().numpy()
+                precision, recall, _ = precision_recall_curve(truth, score)
+                ap = average_precision_score(truth, score)
+
                 # Helper line
                 ref_precision = np.round(
                     precision[(np.abs(recall - self.ref_recall)).argmin()], 2)
-                ref_precisions.append(ref_precision)
                 ax.plot([0, self.ref_recall], [ref_precision, ref_precision],
                         linestyle=self.line_styles[0],
                         linewidth=0.8,
                         alpha=0.5,
                         color=self.color_palette['grey']['shade_500'])
-
-                plt.plot(recall, precision,
+                plt.plot(recall[1:], precision[1:],
                          linestyle=self.line_styles[i],
                          color=self.colors[x][self.shades[i]],
                          label='{0}: {1} jets, AP: {2:.3f}'.format(
-                                 self.legend[i], jet_names[x], ap))
+                                 self.legend[i], name, ap))
 
         # Helper line c.d.
         plt.xticks(list(plt.xticks()[0]) + [self.ref_recall])
         plt.yticks(list(set([0.1, 0.3, 0.5, 0.7, 0.9, 1])))
 
-        ax.legend(loc='upper center', bbox_to_anchor=(0.25, -0.1))
-
         ax.set_xlim(0, 1)
+        ax.legend(loc='upper center', bbox_to_anchor=(0.25, -0.1))
         fig.savefig('%s/precision-recall-curve' % self.save_dir)
-
         plt.close(fig)
+
         self.draw_precision_recall_zoom(results_fp, results_tp, results_base,
                                         jet_names)
 
@@ -141,30 +143,37 @@ class Plotting():
         fig, ax = plt.subplots()
         plt.xlabel("Recall (TPR)", horizontalalignment='right', x=1.0)
         plt.ylabel("Precision (PPV)", horizontalalignment='right', y=1.0)
-        ref_precisions = []
 
-        for i, data_model in enumerate([results_fp, results_tp, results_base]):
-            for x, (recall, precision, ap) in enumerate(data_model):
-                plt.plot(recall, 1-precision,
+        for i, results in enumerate([results_fp, results_tp, results_base]):
+            for x, name in enumerate(jet_names):
+                truth = results[x][:, 0].cpu().numpy()
+                score = results[x][:, 1].cpu().numpy()
+                precision, recall, _ = precision_recall_curve(truth, score)
+                ap = average_precision_score(truth, score)
+
+                plt.plot(recall[1:], 1 - precision[1:],
                          linestyle=self.line_styles[i],
                          color=self.colors[x][self.shades[i]],
                          label='{0}: {1} jets, AP: {2:.3f}'.format(
-                                 self.legend[i], jet_names[x], ap))
+                                 self.legend[i], name, ap))
 
         plt.xticks(list(plt.xticks()[0]) + [self.ref_recall])
+
         ax.set_xlim(0, self.ref_recall)
         ax.set_yscale("log")
         plt.gca().invert_yaxis()
         plt.gca().set_yticklabels(1-plt.gca().get_yticks())
 
         ax.legend(loc='upper center', bbox_to_anchor=(0.25, -0.1))
-
         fig.savefig('%s/precision-recall-curve-zoom' % self.save_dir)
         plt.close(fig)
 
     def draw_loc_delta(self, results_fp, results_tp, results_base,
                        jet_names, nbins=12):
         """Plots the localization and regression error"""
+        results_fp = results_fp.cpu().numpy()
+        results_tp = results_tp.cpu().numpy()
+        results_base = results_base.cpu().numpy()
         # Fix binning across classes
         min_pt, max_pt = np.min(results_fp[:, 1]), np.max(results_fp[:, 1])
         binning = np.logspace(np.log10(min_pt), np.log10(max_pt), nbins)[1:]
