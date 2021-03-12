@@ -13,8 +13,8 @@ def execute(model, dataset, im_size, obj_size, conf_threshold=10**-6,
             batch_size=50, max_distance=.1, num_classes=3, epsilon=10**-6,
             verbose=False):
 
-    results = [torch.empty(0, 2) for _ in range(num_classes)]
-    results_baseline = [torch.empty(0, 2) for _ in range(num_classes)]
+    results = [torch.empty(0, 3) for _ in range(num_classes)]
+    results_baseline = [torch.empty(0, 3) for _ in range(num_classes)]
     deltas, deltas_baseline = torch.empty((0, 5)), torch.empty((0, 5))
 
     if args.verbose:
@@ -74,6 +74,8 @@ def execute(model, dataset, im_size, obj_size, conf_threshold=10**-6,
                         dpt = 1 - d[7] / (t[5] + epsilon)
                         dts = torch.Tensor([t[4], t[5], deta, dphi, dpt])
                         deltas = torch.cat((deltas, dts.unsqueeze(0)))
+
+                        all_detections[x][7] = t[5]
                         break
 
                 for x, b in enumerate(all_baselines):
@@ -97,6 +99,7 @@ def execute(model, dataset, im_size, obj_size, conf_threshold=10**-6,
                         dts = torch.Tensor([b[4], b[5], deta, dphi, dpt])
                         deltas_baseline = torch.cat((deltas_baseline,
                                                      dts.unsqueeze(0)))
+                        all_baselines[x][7] = t[5]
                         break
 
                 if not detected:
@@ -111,11 +114,11 @@ def execute(model, dataset, im_size, obj_size, conf_threshold=10**-6,
 
             for c in range(num_classes):
                 cls_dets = all_detections[all_detections[:, 4] == (c + 1)]
-                results[c] = torch.cat((results[c], cls_dets[:, [6, 5]]))
+                results[c] = torch.cat((results[c], cls_dets[:, [5, 6, 7]]))
 
                 cls_dets = all_baselines[all_baselines[:, 4] == (c + 1)]
                 results_baseline[c] = torch.cat((results_baseline[c],
-                                                 cls_dets[:, [6, 5]]))
+                                                 cls_dets[:, [5, 6, 7]]))
         if args.verbose:
             progress_bar.update(1)
 
@@ -201,6 +204,10 @@ if __name__ == '__main__':
                                plotting_results[1],
                                results_baseline,
                                jet_names)
+    plot.draw_precision_in_pt(plotting_results[0],
+                              plotting_results[1],
+                              results_baseline,
+                              jet_names)
     plot.draw_loc_delta(plotting_deltas[0],
                         plotting_deltas[1],
                         deltas_baseline,
