@@ -13,8 +13,8 @@ def execute(model, dataset, im_size, obj_size, conf_threshold=10**-6,
             batch_size=50, max_distance=.1, num_classes=3, epsilon=10**-6,
             verbose=False):
 
-    results = [torch.empty(0, 3) for _ in range(num_classes)]
-    results_baseline = [torch.empty(0, 3) for _ in range(num_classes)]
+    results = [torch.empty(0, 6) for _ in range(num_classes)]
+    results_baseline = [torch.empty(0, 6) for _ in range(num_classes)]
     deltas, deltas_baseline = torch.empty((0, 5)), torch.empty((0, 5))
 
     if args.verbose:
@@ -25,7 +25,7 @@ def execute(model, dataset, im_size, obj_size, conf_threshold=10**-6,
         pred = model(X).data
         for idx in range(batch_size):
             detections, targets, all_baselines = pred[idx], y[idx], base[idx]
-            all_detections = torch.empty((0, 8))
+            all_detections = torch.empty((0, 6))
 
             for cid, dts in enumerate(detections):
 
@@ -35,19 +35,20 @@ def execute(model, dataset, im_size, obj_size, conf_threshold=10**-6,
                 if dts.size(0) == 0:
                     continue
 
-                bboxes = dts[:, 1:5]
+                dx = (dts[:, 1] + dts[:, 3]).unsqueeze(1)/2
+                dy = (dts[:, 2] + dts[:, 4]).unsqueeze(1)/2
                 scores = dts[:, 0].unsqueeze(1)
                 regres = dts[:, 5].unsqueeze(1)
                 labels = cid*torch.ones(len(scores)).unsqueeze(1)
                 truths = torch.zeros(len(scores)).unsqueeze(1)
 
-                # Format: [xmin, ymin, xmax, ymax, label, score, truth, pt]
-                dts = torch.cat((bboxes, labels, scores, truths, regres), 1)
+                # Format: [x, y, label, score, truth, pt]
+                dts = torch.cat((dx, dy, labels, scores, truths, regres), 1)
                 all_detections = torch.cat((all_detections, dts))
 
             # Sort by confidence
-            all_detections = all_detections[(-all_detections[:, 5]).argsort()]
-            all_baselines = all_baselines[(all_baselines[:, 5]).argsort()]
+            all_detections = all_detections[(-all_detections[:, 3]).argsort()]
+            all_baselines = all_baselines[(all_baselines[:, 3]).argsort()]
 
             for t in targets:
                 detected, dbaseline = False, False
@@ -55,70 +56,71 @@ def execute(model, dataset, im_size, obj_size, conf_threshold=10**-6,
                 ty = (t[1]+t[3])/2
 
                 for x, d in enumerate(all_detections):
-                    dx = (d[0]+d[2])/2
-                    dy = (d[1]+d[3])/2
-                    delta_eta = (tx-dx)
-                    delta_phi = torch.min((ty-dy) % 1, (dy-ty) % 1)
+                    delta_eta = (tx-d[0])
+                    delta_phi = torch.min((ty-d[1]) % 1, (d[1]-ty) % 1)
                     distance = torch.sqrt(delta_eta**2+delta_phi**2)
 
                     if distance > max_distance:
                         continue
 
-                    if d[4] == t[4]:
+                    if d[2] == t[4]:
                         detected = True
-                        all_detections[x][6] = 1
 
                         # Angular resolution and regression data
                         deta = np.radians(1)*im_size[0]*delta_eta
                         dphi = np.radians(1)*im_size[1]*delta_phi
-                        dpt = 1 - d[7] / (t[5] + epsilon)
+                        dpt = 1 - d[5] / (t[5] + epsilon)
                         dts = torch.Tensor([t[4], t[5], deta, dphi, dpt])
                         deltas = torch.cat((deltas, dts.unsqueeze(0)))
 
-                        all_detections[x][7] = t[5]
+                        all_detections[x][0] = tx
+                        all_detections[x][1] = ty
+                        all_detections[x][4] = 1
+                        all_detections[x][5] = t[5]
                         break
 
                 for x, b in enumerate(all_baselines):
-                    bx = (b[0]+b[2])/2
-                    by = (b[1]+b[3])/2
-                    delta_eta = (tx-bx)
-                    delta_phi = torch.min((ty-by) % 1, (dy-by) % 1)
+                    delta_eta = (tx-b[0])
+                    delta_phi = torch.min((ty-b[1]) % 1, (b[1]-ty) % 1)
                     distance = torch.sqrt(delta_eta**2+delta_phi**2)
 
                     if distance > max_distance:
                         continue
 
-                    if b[4] == t[4]:
+                    if b[2] == t[4]:
                         dbaseline = True
-                        all_baselines[x][6] = 1
 
                         # Angular resolution and regression data
                         deta = np.radians(1)*im_size[0]*delta_eta
                         dphi = np.radians(1)*im_size[1]*delta_phi
-                        dpt = 1 - b[7] / (t[5] + epsilon)
-                        dts = torch.Tensor([b[4], b[5], deta, dphi, dpt])
+                        dpt = 1 - b[5] / (t[5] + epsilon)
+                        dts = torch.Tensor([t[4], t[5], deta, dphi, dpt])
                         deltas_baseline = torch.cat((deltas_baseline,
                                                      dts.unsqueeze(0)))
-                        all_baselines[x][7] = t[5]
+
+                        all_baselines[x][0] = tx
+                        all_baselines[x][1] = ty
+                        all_baselines[x][4] = 1
+                        all_baselines[x][5] = t[5]
                         break
 
                 if not detected:
-                    fn = torch.cat((t[:5], torch.Tensor([0, 1, t[5]])))
+                    fn = torch.Tensor([tx, ty, t[4], 0, 1, t[5]])
                     fn = fn.unsqueeze(0)
                     all_detections = torch.cat((all_detections, fn))
 
                 if not dbaseline:
-                    fn = torch.cat((t[:5], torch.Tensor([0, 1, t[5]])))
+                    fn = torch.Tensor([tx, ty, t[4], 0, 1, t[5]])
                     fn = fn.unsqueeze(0)
                     all_baselines = torch.cat((all_baselines, fn))
 
             for c in range(num_classes):
-                cls_dets = all_detections[all_detections[:, 4] == (c + 1)]
-                results[c] = torch.cat((results[c], cls_dets[:, [5, 6, 7]]))
+                dets = all_detections[all_detections[:, 2] == (c + 1)]
+                results[c] = torch.cat((results[c], dets))
 
-                cls_dets = all_baselines[all_baselines[:, 4] == (c + 1)]
-                results_baseline[c] = torch.cat((results_baseline[c],
-                                                 cls_dets[:, [5, 6, 7]]))
+                dets = all_baselines[all_baselines[:, 2] == (c + 1)]
+                results_baseline[c] = torch.cat((results_baseline[c], dets))
+
         if args.verbose:
             progress_bar.update(1)
 
@@ -204,10 +206,10 @@ if __name__ == '__main__':
                                plotting_results[1],
                                results_baseline,
                                jet_names)
-    plot.draw_precision_in_pt(plotting_results[0],
-                              plotting_results[1],
-                              results_baseline,
-                              jet_names)
+    plot.draw_precision_details(plotting_results[0],
+                                plotting_results[1],
+                                results_baseline,
+                                jet_names)
     plot.draw_loc_delta(plotting_deltas[0],
                         plotting_deltas[1],
                         deltas_baseline,

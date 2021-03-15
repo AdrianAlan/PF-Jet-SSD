@@ -135,20 +135,20 @@ class CalorimeterJetDataset(torch.utils.data.Dataset):
         base = torch.empty_like(base_reshaped)
 
         # Set fractional coordinates
-        base[:, 0] = (base_reshaped[:, 1] - self.size) / float(self.width)
-        base[:, 1] = (base_reshaped[:, 2] - self.size) / float(self.height)
-        base[:, 2] = (base_reshaped[:, 1] + self.size) / float(self.width)
-        base[:, 3] = (base_reshaped[:, 2] + self.size) / float(self.height)
+        base[:, 0] = base_reshaped[:, 1] / float(self.width)
+        base[:, 1] = base_reshaped[:, 2] / float(self.height)
 
         # Set class label
-        base[:, 4] = base_reshaped[:, 0] + 1
+        base[:, 2] = base_reshaped[:, 0] + 1
 
-        score = base_reshaped[:, 4].unsqueeze(1)
-        truth = torch.zeros_like(score)
-        pt = base_reshaped[:, 3].unsqueeze(1) / scaler
-        base = torch.cat((base, score), 1)
-        base = torch.cat((base, truth), 1)
-        base = torch.cat((base, pt), 1)
+        # Add score
+        base[:, 3] = base_reshaped[:, 4]
+
+        # Add truth
+        base[:, 4] = 0
+
+        # Add pT
+        base = torch.cat((base, base_reshaped[:, 3].unsqueeze(1) / scaler), 1)
 
         return base
 

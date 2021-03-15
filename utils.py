@@ -105,8 +105,8 @@ class Plotting():
 
         for i, results in enumerate([results_fp, results_tp, results_base]):
             for x, name in enumerate(jet_names):
-                score = results[x][:, 0].cpu().numpy()
-                truth = results[x][:, 1].cpu().numpy()
+                score = results[x][:, 3].cpu().numpy()
+                truth = results[x][:, 4].cpu().numpy()
                 precision, recall, _ = precision_recall_curve(truth, score)
                 ap = average_precision_score(truth, score)
 
@@ -147,8 +147,8 @@ class Plotting():
 
         for i, results in enumerate([results_fp, results_tp, results_base]):
             for x, name in enumerate(jet_names):
-                score = results[x][:, 0].cpu().numpy()
-                truth = results[x][:, 1].cpu().numpy()
+                score = results[x][:, 3].cpu().numpy()
+                truth = results[x][:, 4].cpu().numpy()
                 precision, recall, _ = precision_recall_curve(truth, score)
                 ap = average_precision_score(truth, score)
 
@@ -169,50 +169,10 @@ class Plotting():
         fig.savefig('%s/precision-recall-curve-zoom' % self.save_dir)
         plt.close(fig)
 
-    def draw_precision_in_pt(self, results_fp, results_tp, results_base,
-                             jet_names, nbins=12):
+    def draw_precision_details(self, results_fp, results_tp, results_base,
+                               jet_names, nbins=11):
         """Plots precision at fixed recall as a function of pT"""
 
-        fig, ax = plt.subplots()
-        plt.xlabel('$p_T$ [GeV]', horizontalalignment='right', x=1.0)
-        plt.ylabel("Precision (PPV)", horizontalalignment='right', y=1.0)
-
-        # Fix binning across classes
-        all_pts = np.array([])
-        for x, _ in enumerate(jet_names):
-            all_pts = np.append(all_pts, results_base[x][:, 2].cpu().numpy())
-        min_pt, max_pt = np.min(all_pts), np.max(all_pts)
-        binning = np.logspace(np.log10(min_pt), np.log10(max_pt), nbins)[1:]
-
-        for x, _ in enumerate(jet_names):
-
-            for i, result in enumerate([results_fp, results_tp, results_base]):
-                color = self.colors[x][self.shades[i]]
-                score = result[x][:, 0].cpu().numpy()
-                truth = result[x][:, 1].cpu().numpy()
-                pts = result[x][:, 2].cpu().numpy()
-
-                bmin, v = 0, []
-                for bmax in binning:
-                    mask = (pts > bmin) & (pts <= pts)
-                    s, t = score[mask], truth[mask]
-                    if len(s):
-                        p, r, _ = precision_recall_curve(t, s)
-                        tmp = p[(np.abs(r - self.ref_recall)).argmin()]
-                        v.append(np.round(tmp, 2))
-                    else:
-                        v.append(np.nan)
-                    bmin = bmax
-                ax.plot(binning, v,
-                        color=color,
-                        marker=self.markers[i],
-                        linestyle=self.line_styles[i],
-                        markersize=5)
-
-        ax.set_xlim([min_pt, max_pt*1.2])
-        ax.set_xscale("log")
-
-        # Add legend
         legend_helper_network, legend_helper_type = [], []
         for i, name in enumerate(self.legend):
             legend_helper_network.append(Line2D([], [],
@@ -226,15 +186,74 @@ class Plotting():
                                              linewidth=2,
                                              color=self.colors[i]['shade_800'],
                                              label='%s jets' % jet))
-        plt.gca().add_artist(plt.legend(handles=legend_helper_type,
-                                        loc='upper left',
-                                        bbox_to_anchor=(0, -0.1)))
-        plt.gca().add_artist(plt.legend(handles=legend_helper_network,
-                                        loc='upper left',
-                                        bbox_to_anchor=(0.2, -0.1)))
 
-        fig.savefig('%s/precision-pt' % self.save_dir)
-        plt.close(fig)
+        for i, l, n in [(0, r'$\eta$', 'eta'),
+                        (1, r'$\phi$', 'phi'),
+                        (5, r'$pT [GeV]$', 'pt')]:
+
+            fig, ax = plt.subplots()
+            plt.xlabel(l, horizontalalignment='right', x=1.0)
+            plt.ylabel("Precision (PPV)", horizontalalignment='right', y=1.0)
+
+            # Fix binning across classes
+            if i == 5:
+                v = np.array([])
+                for x, _ in enumerate(jet_names):
+                    v = np.append(v, results_base[x][:, i].cpu().numpy())
+                max_pt = np.max(v)
+                binning = np.logspace(0, np.log10(max_pt), nbins)[1:]
+                ax.set_xlim([1, max_pt*1.2])
+                ax.set_xscale("log")
+            else:
+                binning = np.linspace(0, 1, nbins)[1:]
+                ax.set_xlim([0, 1])
+
+            for x, _ in enumerate(jet_names):
+
+                for index, result in enumerate([results_fp,
+                                                results_tp,
+                                                results_base]):
+                    color = self.colors[x][self.shades[index]]
+                    score = result[x][:, 3].cpu().numpy()
+                    truth = result[x][:, 4].cpu().numpy()
+                    values = result[x][:, i].cpu().numpy()
+
+                    bmin, v = -np.inf, []
+                    for bmax in binning:
+                        if binning[-1] == bmax:
+                            mask = (values > bmin)
+                        else:
+                            mask = (values > bmin) & (values <= bmax)
+                        s, t = score[mask], truth[mask]
+                        if len(s):
+                            p, r, _ = precision_recall_curve(t, s)
+                            tmp = p[(np.abs(r - self.ref_recall)).argmin()]
+                            v.append(np.round(tmp, 2))
+                        else:
+                            v.append(np.nan)
+                        bmin = bmax
+
+                    if i == 5:
+                        xvalues = binning
+                    else:
+                        xvalues = binning-binning[0]/2
+
+                    ax.plot(xvalues, v,
+                            color=color,
+                            marker=self.markers[index],
+                            linestyle=self.line_styles[index],
+                            markersize=5)
+
+            # Add legend
+            plt.gca().add_artist(plt.legend(handles=legend_helper_type,
+                                            loc='upper left',
+                                            bbox_to_anchor=(0, -0.1)))
+            plt.gca().add_artist(plt.legend(handles=legend_helper_network,
+                                            loc='upper left',
+                                            bbox_to_anchor=(0.2, -0.1)))
+
+            fig.savefig('{}/precision-{}'.format(self.save_dir, n))
+            plt.close(fig)
 
     def draw_loc_delta(self, results_fp, results_tp, results_base,
                        jet_names, nbins=12):
