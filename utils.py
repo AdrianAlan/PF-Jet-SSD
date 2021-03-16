@@ -201,8 +201,8 @@ class Plotting():
                 for x, _ in enumerate(jet_names):
                     v = np.append(v, results_base[x][:, i].cpu().numpy())
                 max_pt = np.max(v)
-                binning = np.logspace(0, np.log10(max_pt), nbins)[1:]
-                ax.set_xlim([1, max_pt*1.2])
+                binning = np.logspace(2, np.log10(max_pt), nbins)[1:]
+                ax.set_xlim([100, max_pt*1.2])
                 ax.set_xscale("log")
             else:
                 binning = np.linspace(0, 1, nbins)[1:]
@@ -417,7 +417,8 @@ def collate_fn(batch):
     if len(transposed_data) < 3:
         return inp, tgt
     bsl = list(transposed_data[2])
-    return inp, tgt, bsl
+    slr = list(transposed_data[3])
+    return inp, tgt, bsl, slr
 
 
 def get_data_loader(hdf5_source_path, batch_size, num_workers,

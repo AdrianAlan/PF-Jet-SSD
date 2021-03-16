@@ -20,12 +20,14 @@ def execute(model, dataset, im_size, obj_size, conf_threshold=10**-6,
     if args.verbose:
         progress_bar = tqdm(total=len(dataset), desc='Evaluating events')
 
-    for X, y, base in dataset:
+    for X, y, baseline, scalers in dataset:
 
-        pred = model(X).data
+        y_pred = model(X).data
         for idx in range(batch_size):
-            detections, targets, all_baselines = pred[idx], y[idx], base[idx]
             all_detections = torch.empty((0, 6))
+            detections, targets = y_pred[idx], y[idx]
+            all_baselines = baseline[idx]
+            scaler = scalers[idx]
 
             for cid, dts in enumerate(detections):
 
@@ -38,7 +40,7 @@ def execute(model, dataset, im_size, obj_size, conf_threshold=10**-6,
                 dx = (dts[:, 1] + dts[:, 3]).unsqueeze(1)/2
                 dy = (dts[:, 2] + dts[:, 4]).unsqueeze(1)/2
                 scores = dts[:, 0].unsqueeze(1)
-                regres = dts[:, 5].unsqueeze(1)
+                regres = dts[:, 5].unsqueeze(1) * scaler
                 labels = cid*torch.ones(len(scores)).unsqueeze(1)
                 truths = torch.zeros(len(scores)).unsqueeze(1)
 
@@ -54,6 +56,7 @@ def execute(model, dataset, im_size, obj_size, conf_threshold=10**-6,
                 detected, dbaseline = False, False
                 tx = (t[0]+t[2])/2
                 ty = (t[1]+t[3])/2
+                tp = t[5] * scaler
 
                 for x, d in enumerate(all_detections):
                     delta_eta = (tx-d[0])
@@ -69,14 +72,14 @@ def execute(model, dataset, im_size, obj_size, conf_threshold=10**-6,
                         # Angular resolution and regression data
                         deta = np.radians(1)*im_size[0]*delta_eta
                         dphi = np.radians(1)*im_size[1]*delta_phi
-                        dpt = 1 - d[5] / (t[5] + epsilon)
-                        dts = torch.Tensor([t[4], t[5], deta, dphi, dpt])
+                        dpt = 1 - d[5] / (tp + epsilon)
+                        dts = torch.Tensor([t[4], tp, deta, dphi, dpt])
                         deltas = torch.cat((deltas, dts.unsqueeze(0)))
 
                         all_detections[x][0] = tx
                         all_detections[x][1] = ty
                         all_detections[x][4] = 1
-                        all_detections[x][5] = t[5]
+                        all_detections[x][5] = tp
                         break
 
                 for x, b in enumerate(all_baselines):
@@ -93,24 +96,24 @@ def execute(model, dataset, im_size, obj_size, conf_threshold=10**-6,
                         # Angular resolution and regression data
                         deta = np.radians(1)*im_size[0]*delta_eta
                         dphi = np.radians(1)*im_size[1]*delta_phi
-                        dpt = 1 - b[5] / (t[5] + epsilon)
-                        dts = torch.Tensor([t[4], t[5], deta, dphi, dpt])
+                        dpt = 1 - b[5] / (tp + epsilon)
+                        dts = torch.Tensor([t[4], tp, deta, dphi, dpt])
                         deltas_baseline = torch.cat((deltas_baseline,
                                                      dts.unsqueeze(0)))
 
                         all_baselines[x][0] = tx
                         all_baselines[x][1] = ty
                         all_baselines[x][4] = 1
-                        all_baselines[x][5] = t[5]
+                        all_baselines[x][5] = tp
                         break
 
                 if not detected:
-                    fn = torch.Tensor([tx, ty, t[4], 0, 1, t[5]])
+                    fn = torch.Tensor([tx, ty, t[4], 0, 1, tp])
                     fn = fn.unsqueeze(0)
                     all_detections = torch.cat((all_detections, fn))
 
                 if not dbaseline:
-                    fn = torch.Tensor([tx, ty, t[4], 0, 1, t[5]])
+                    fn = torch.Tensor([tx, ty, t[4], 0, 1, tp])
                     fn = fn.unsqueeze(0)
                     all_baselines = torch.cat((all_baselines, fn))
 

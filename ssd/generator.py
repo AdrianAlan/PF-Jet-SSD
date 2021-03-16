@@ -63,8 +63,8 @@ class CalorimeterJetDataset(torch.utils.data.Dataset):
 
         if self.return_baseline:
             base_raw = tcuda.FloatTensor(self.base[index], device=self.rank)
-            base_processed = self.process_baseline(base_raw, scaler)
-            return calorimeter, labels_processed, base_processed
+            base_processed = self.process_baseline(base_raw)
+            return calorimeter, labels_processed, base_processed, scaler
 
         return calorimeter, labels_processed
 
@@ -130,7 +130,7 @@ class CalorimeterJetDataset(torch.utils.data.Dataset):
                                                             self.height]))
         return pixels.to_dense(), scaler
 
-    def process_baseline(self, base_raw, scaler):
+    def process_baseline(self, base_raw):
         base_reshaped = base_raw.reshape(-1, 5)
         base = torch.empty_like(base_reshaped)
 
@@ -148,7 +148,7 @@ class CalorimeterJetDataset(torch.utils.data.Dataset):
         base[:, 4] = 0
 
         # Add pT
-        base = torch.cat((base, base_reshaped[:, 3].unsqueeze(1) / scaler), 1)
+        base = torch.cat((base, base_reshaped[:, 3].unsqueeze(1)), 1)
 
         return base
 
