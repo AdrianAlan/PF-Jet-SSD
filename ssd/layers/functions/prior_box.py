@@ -34,6 +34,9 @@ class PriorBox(Function):
 
                 mean += [cx, cy, s_k_max_x, s_k_max_y]
 
-        output = torch.cuda.FloatTensor(mean, device=rank).view(-1, 4)
+        if rank == 'cpu':
+            output = torch.FloatTensor(mean).view(-1, 4)
+        else:
+            output = torch.cuda.FloatTensor(mean, device=rank).view(-1, 4)
 
         return output

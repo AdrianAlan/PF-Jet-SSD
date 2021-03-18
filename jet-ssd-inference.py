@@ -5,6 +5,7 @@ import torch
 import torch.nn as nn
 import torch.backends.cudnn as cudnn
 import sys
+import timeit
 import yaml
 
 from ssd.net import build_ssd
@@ -27,12 +28,6 @@ if __name__ == '__main__':
     logger = set_logging('Test_SSD', '{}.log'.format(base), args.verbose)
     logger.info('Testing {0} model'.format(source_path))
 
-    if not torch.cuda.is_available():
-        logger.error('CUDA not available. Aborting!')
-        sys.exit(0)
-
-    torch.set_default_tensor_type('torch.cuda.FloatTensor')
-
     inference_pref = config['inference_pref']
     batch_sizes = inference_pref['batch_sizes']
     samples = inference_pref['samples']
@@ -42,19 +37,21 @@ if __name__ == '__main__':
     ssd_settings['n_classes'] += 1
     in_dim = ssd_settings['input_dimensions']
 
-    logger.info('Initiating...')
+    batch_sizes = np.array(batch_sizes)
+    size = len(batch_sizes)
+    cpu = False
+
+    logger.info('Initiating GPU measurements...')
 
     device = torch.device('cuda')
+    torch.set_default_tensor_type('torch.cuda.FloatTensor')
     net = build_ssd(rank, ssd_settings, inference=True)
     net.load_weights(source_path)
     net.eval()
     net.to(device)
     s = torch.cuda.Event(enable_timing=True)
     e = torch.cuda.Event(enable_timing=True)
-    batch_sizes = np.array(batch_sizes)
-    bs = len(batch_sizes)
-    lat_means, thr_means = (np.zeros((bs)), np.zeros((bs)))
-    lat_stds, thr_stds = (np.zeros((bs)), np.zeros((bs)))
+    lat_means, thr_means = (np.zeros((size)), np.zeros((size)))
 
     for x, bs in enumerate(batch_sizes):
         logger.info('Measure for batch size: {0}'.format(bs))
@@ -76,22 +73,56 @@ if __name__ == '__main__':
                 torch.cuda.synchronize()
                 measurements[i] = s.elapsed_time(e)
 
-        lat_mean = np.mean(measurements / bs)
-        lat_std = np.std(measurements / bs)
-        thr_mean = np.mean(1000*bs / measurements)
-        thr_std = np.std(1000*bs / measurements)
+        lat_mean = np.mean(measurements)
+        thr_mean = 1000.0*bs / lat_mean
 
         lat_means[x] = lat_mean
-        lat_stds[x] = lat_std
         thr_means[x] = thr_mean
-        thr_stds[x] = thr_std
 
-        logger.info('Latency: {0:.2f} ± {1:.2f} ms'.format(lat_mean, lat_std))
+        logger.info('Latency: {0:.2f} ms'.format(lat_mean))
         logger.info('Throughput: {0:.2f} eps'.format(thr_mean))
+
+    if cpu:
+        logger.info('Initiating CPU measurements...')
+
+        device = torch.device('cpu')
+        torch.set_default_tensor_type('torch.FloatTensor')
+        net = build_ssd('cpu', ssd_settings, inference=True)
+        net.load_weights(source_path)
+        net.eval()
+        lat_means, thr_means = (np.zeros((size)), np.zeros((size)))
+
+        for x, bs in enumerate(batch_sizes):
+            logger.info('Measure for batch size: {0}'.format(bs))
+
+            dummy_input = torch.unsqueeze(torch.randn(in_dim), 0)
+            batch = torch.cat(bs*[dummy_input])
+
+            logger.info('Measuring latency')
+            with torch.no_grad():
+                try:
+                    lat_mean = 1000.0*timeit.timeit('net(batch)',
+                                                    number=samples,
+                                                    globals=globals())
+                except RuntimeError:
+                    lat_mean = None
+                    thr_mean = None
+
+            if lat_mean:
+                thr_mean = 1000.0*bs / lat_mean
+                logger.info('Latency: {0:.2f} ms'.format(lat_mean))
+                logger.info('Throughput: {0:.2f} eps'.format(thr_mean))
+
+            lat_means[x] = lat_mean
+            thr_means[x] = thr_mean
 
     logger.info('Plotting results')
     plot = Plotting(save_dir=config['output']['plots'])
-    plot.draw_errorbar(batch_sizes, lat_means, lat_stds,
-                       'Latency [ms]', 'latency-gpu')
-    plot.draw_errorbar(batch_sizes, thr_means, thr_stds,
-                       'Throughput [eps]', 'throughput-gpu')
+    plot.draw_barchart(batch_sizes, lat_means,
+                       'FP32 GPU',
+                       ylabel='Latency [ms]',
+                       save_name='inference-latency')
+    plot.draw_barchart(batch_sizes, thr_means,
+                       'FP32 GPU',
+                       ylabel='Throughput [eps]',
+                       save_name='inference-throughput')

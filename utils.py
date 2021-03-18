@@ -327,20 +327,21 @@ class Plotting():
             fig.savefig('%s/delta-%s' % (self.save_dir, n))
             plt.close(fig)
 
-    def draw_errorbar(self, x, y, e, ylabel, name):
+    def draw_barchart(self, x, y, label, ylabel, xlabel='Batch size [events]',
+                      save_name='inference'):
         """Plots errobars as a function of batch size"""
         fig, ax = plt.subplots()
 
-        xlabel = 'Batch size [events]'
+        groups = np.arange(len(x))
         ax.set_xlabel(xlabel, horizontalalignment='right', x=1.0)
         ax.set_ylabel(ylabel, horizontalalignment='right', y=1.0)
-        ax.set_xscale('log')
-        ax.errorbar(x, y, yerr=e,
-                    fmt='.',
-                    elinewidth=1,
-                    markersize=5,
-                    color=self.colors[0]['shade_500'])
-        fig.savefig('%s/inference-%s' % (self.save_dir, name))
+        ax.bar(groups, y, label=label, color=self.colors[0]['shade_500'])
+        ax.set_xticks(groups)
+        ax.set_xticklabels(x)
+        ax.legend(bbox_to_anchor=(0, 1), loc='lower left')
+
+        fig.tight_layout()
+        fig.savefig('{}/{}'.format(self.save_dir, save_name))
         plt.close(fig)
 
 
