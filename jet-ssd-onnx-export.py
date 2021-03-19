@@ -1,5 +1,3 @@
-import setGPU
-
 import argparse
 import numpy as np
 import onnx
@@ -39,7 +37,7 @@ if __name__ == '__main__':
     logger.info('Prepare PyTorch model')
     ssd_settings = config['ssd_settings']
     ssd_settings['n_classes'] += 1
-    net = build_ssd(0, ssd_settings, inference=True, onnx=True)
+    net = build_ssd('cpu', ssd_settings, inference=True, onnx=True)
     net.load_weights(source_path)
     net.eval()
 
