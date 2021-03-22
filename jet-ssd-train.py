@@ -109,7 +109,7 @@ def execute(rank, world_size, name, quantized, dataset, output, training_pref,
         if quantized:
             for m in net.modules():
                 if isinstance(m, nn.Conv2d):
-                    if m.in_channels > 2 and m.out_channels > 4:
+                    if m.in_channels > 3 and m.out_channels > 4:
                         delta = get_delta(m.weight.data)
                         m.weight.delta = delta
                         m.weight.alpha = get_alpha(m.weight.data, delta)
@@ -120,7 +120,7 @@ def execute(rank, world_size, name, quantized, dataset, output, training_pref,
             if quantized:
                 for m in net.modules():
                     if isinstance(m, nn.Conv2d):
-                        if m.in_channels > 2 and m.out_channels > 4:
+                        if m.in_channels > 3 and m.out_channels > 4:
                             m.weight.org = m.weight.data.clone()
                             m.weight.data = to_ternary(m.weight.data,
                                                        m.weight.delta,
@@ -135,7 +135,7 @@ def execute(rank, world_size, name, quantized, dataset, output, training_pref,
             if quantized:
                 for m in net.modules():
                     if isinstance(m, nn.Conv2d):
-                        if m.in_channels > 2 and m.out_channels > 4:
+                        if m.in_channels > 3 and m.out_channels > 4:
                             m.weight.data.copy_(m.weight.org)
 
             scaler.step(optimizer)
@@ -145,7 +145,7 @@ def execute(rank, world_size, name, quantized, dataset, output, training_pref,
             if quantized:
                 for m in net.modules():
                     if isinstance(m, nn.Conv2d):
-                        if m.in_channels > 2 and m.out_channels > 4:
+                        if m.in_channels > 3 and m.out_channels > 4:
                             m.weight.org.copy_(m.weight.data.clamp_(-1, 1))
 
             all_epoch_loss += torch.tensor([l.item(), c.item(), r.item()])
@@ -174,7 +174,7 @@ def execute(rank, world_size, name, quantized, dataset, output, training_pref,
             if quantized:
                 for m in net.modules():
                     if isinstance(m, nn.Conv2d):
-                        if m.in_channels > 2 and m.out_channels > 4:
+                        if m.in_channels > 3 and m.out_channels > 4:
                             m.weight.org = m.weight.data.clone()
                             m.weight.data = to_ternary(m.weight.data)
 
@@ -207,7 +207,7 @@ def execute(rank, world_size, name, quantized, dataset, output, training_pref,
             if quantized:
                 for m in net.modules():
                     if isinstance(m, nn.Conv2d):
-                        if m.in_channels > 2 and m.out_channels > 4:
+                        if m.in_channels > 3 and m.out_channels > 4:
                             m.weight.org.copy_(m.weight.data)
         scheduler.step()
     cleanup()
