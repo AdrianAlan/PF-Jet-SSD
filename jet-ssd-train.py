@@ -108,23 +108,21 @@ def execute(rank, world_size, name, quantized, dataset, output, training_pref,
         # Ternarize weights
         if quantized:
             for m in net.modules():
-                if isinstance(m, nn.Conv2d):
-                    if m.in_channels > 3 and m.out_channels > 4:
-                        delta = get_delta(m.weight.data)
-                        m.weight.delta = delta
-                        m.weight.alpha = get_alpha(m.weight.data, delta)
+                if is_first_or_last(m):
+                    delta = get_delta(m.weight.data)
+                    m.weight.delta = delta
+                    m.weight.alpha = get_alpha(m.weight.data, delta)
 
         for batch_index, (images, targets) in enumerate(train_loader):
 
             # Ternarize weights
             if quantized:
                 for m in net.modules():
-                    if isinstance(m, nn.Conv2d):
-                        if m.in_channels > 3 and m.out_channels > 4:
-                            m.weight.org = m.weight.data.clone()
-                            m.weight.data = to_ternary(m.weight.data,
-                                                       m.weight.delta,
-                                                       m.weight.alpha)
+                    if is_first_or_last(m):
+                        m.weight.org = m.weight.data.clone()
+                        m.weight.data = to_ternary(m.weight.data,
+                                                   m.weight.delta,
+                                                   m.weight.alpha)
 
             with autocast():
                 outputs = net(images)
@@ -134,9 +132,8 @@ def execute(rank, world_size, name, quantized, dataset, output, training_pref,
 
             if quantized:
                 for m in net.modules():
-                    if isinstance(m, nn.Conv2d):
-                        if m.in_channels > 3 and m.out_channels > 4:
-                            m.weight.data.copy_(m.weight.org)
+                    if is_first_or_last(m):
+                        m.weight.data.copy_(m.weight.org)
 
             scaler.step(optimizer)
             scaler.update()
@@ -144,9 +141,8 @@ def execute(rank, world_size, name, quantized, dataset, output, training_pref,
 
             if quantized:
                 for m in net.modules():
-                    if isinstance(m, nn.Conv2d):
-                        if m.in_channels > 3 and m.out_channels > 4:
-                            m.weight.org.copy_(m.weight.data.clamp_(-1, 1))
+                    if is_first_or_last(m):
+                        m.weight.org.copy_(m.weight.data.clamp_(-1, 1))
 
             all_epoch_loss += torch.tensor([l.item(), c.item(), r.item()])
             av_epoch_loss = all_epoch_loss / (batch_index + 1)
@@ -173,10 +169,9 @@ def execute(rank, world_size, name, quantized, dataset, output, training_pref,
             # Ternarize weights
             if quantized:
                 for m in net.modules():
-                    if isinstance(m, nn.Conv2d):
-                        if m.in_channels > 3 and m.out_channels > 4:
-                            m.weight.org = m.weight.data.clone()
-                            m.weight.data = to_ternary(m.weight.data)
+                    if is_first_or_last(m):
+                        m.weight.org = m.weight.data.clone()
+                        m.weight.data = to_ternary(m.weight.data)
 
             for batch_index, (images, targets) in enumerate(val_loader):
                 outputs = net(images)
@@ -206,11 +201,16 @@ def execute(rank, world_size, name, quantized, dataset, output, training_pref,
 
             if quantized:
                 for m in net.modules():
-                    if isinstance(m, nn.Conv2d):
-                        if m.in_channels > 3 and m.out_channels > 4:
-                            m.weight.org.copy_(m.weight.data)
+                    if is_first_or_last(m):
+                        m.weight.org.copy_(m.weight.data)
         scheduler.step()
     cleanup()
+
+
+def is_first_or_last(layer):
+    return (isinstance(layer, nn.Conv2d)
+            and layer.in_channels > 3
+            and layer.out_channels > 4)
 
 
 def reduce_tensor(loc, cls, reg):
