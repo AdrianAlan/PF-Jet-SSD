@@ -7,49 +7,6 @@ from ssd.layers import *
 from ssd.qutils import uniform_quantization
 from torch.autograd import Variable
 
-from collections import namedtuple
-
-Bottleneck = namedtuple('Bottleneck', ['stride', 'depth', 'num', 't'])
-
-
-class _bottleneck(nn.Module):
-    def __init__(self, inplanes, planes, stride=1, expansion=4,
-                 downsample=None):
-        super(_bottleneck, self).__init__()
-        self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=1, bias=False)
-        self.bn1 = nn.BatchNorm2d(planes)
-        self.relu1 = nn.PReLU(planes)
-        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=stride,
-                               padding=1, bias=False)
-        self.bn2 = nn.BatchNorm2d(planes)
-        self.relu2 = nn.PReLU(planes)
-        self.conv3 = nn.Conv2d(planes, planes * expansion, kernel_size=1,
-                               bias=False)
-        self.bn3 = nn.BatchNorm2d(planes * expansion)
-        self.relu3 = nn.PReLU(planes * expansion)
-        self.downsample = downsample
-        self.stride = stride
-
-    def forward(self, x):
-        residual = x
-
-        out = self.conv1(x)
-        out = self.bn1(out)
-        out = self.relu1(out)
-        out = self.conv2(out)
-        out = self.bn2(out)
-        out = self.relu2(out)
-        out = self.conv3(out)
-        out = self.bn3(out)
-
-        if self.downsample is not None:
-            residual = self.downsample(x)
-
-        out += residual
-        out = self.relu3(out)
-
-        return out
-
 
 class SSD(nn.Module):
 
@@ -59,7 +16,7 @@ class SSD(nn.Module):
         self.inference = inference
         self.onnx = onnx
         self.rank = rank
-        self.resnet = nn.ModuleList(base)
+        self.mobilenet = nn.ModuleList(base)
         self.loc = nn.ModuleList(head[0])
         self.cnf = nn.ModuleList(head[1])
         self.reg = nn.ModuleList(head[2])
@@ -91,7 +48,7 @@ class SSD(nn.Module):
         sources, loc, cnf, reg = list(), list(), list(), list()
 
         # Add base network
-        for i, layer in enumerate(self.resnet):
+        for i, layer in enumerate(self.mobilenet):
             layer = layer.cuda(self.rank)
             x = layer(x)
             if i == 11:
@@ -137,7 +94,7 @@ class SSD(nn.Module):
         if ext == '.pkl' or '.pth':
             state_dict = torch.load(file_path, map_location=lambda s, loc: s)
             self.load_state_dict(state_dict, strict=False)
-            for o in [self.resnet]:
+            for o in [self.mobilenet]:
                 for m in o.modules():
                     if isinstance(m, nn.Conv2d):
                         if m.in_channels == 3:
@@ -152,36 +109,45 @@ class SSD(nn.Module):
         return False
 
 
-def resnet(c, inference):
-    conv_defs = [Bottleneck(stride=1, depth=32, num=2, t=4),
-                 Bottleneck(stride=1, depth=64, num=2, t=4),
-                 Bottleneck(stride=1, depth=128, num=2, t=4),
-                 Bottleneck(stride=1, depth=256, num=2, t=4)]
-    depth_multiplier = 1.0
-    min_depth = 8
-    depth = lambda d: max(int(d * depth_multiplier), min_depth)
-    layers = [nn.Conv2d(3, 32, kernel_size=3, stride=1, padding=1, bias=False),
-              nn.BatchNorm2d(32),
-              nn.PReLU(32),
-              nn.AvgPool2d(kernel_size=2, stride=2, padding=1)]
-    in_ch = 32
-    for conv_def in conv_defs:
-        if conv_def.stride != 1 or in_ch != depth(conv_def.depth * conv_def.t):
-            _downsample = nn.Sequential(
-                nn.Conv2d(in_ch, depth(conv_def.depth * conv_def.t),
-                          kernel_size=1, stride=conv_def.stride, bias=False),
-                nn.BatchNorm2d(depth(conv_def.depth * conv_def.t)),
-            )
-        for n in range(conv_def.num):
-            (s, d) = (conv_def.stride, _downsample) if n == 0 else (1, None)
-            layers += [_bottleneck(in_ch, depth(conv_def.depth), s,
-                                   conv_def.t, d)]
-            in_ch = depth(conv_def.depth * conv_def.t)
-        layers += [nn.AvgPool2d(kernel_size=2, s=2, padding=1)]
+def conv_bn(inp, oup):
+    return nn.Sequential(
+        nn.Conv2d(inp, out, kernel_size=3, stride=1, padding=1, bias=False),
+        nn.BatchNorm2d(out),
+        nn.PReLU(out)
+    )
 
+
+def conv_dw(inp, out):
+    return nn.Sequential(
+        nn.Conv2d(inp, inp, kernel_size=3, stride=1, padding=1, bias=False,
+                  groups=inp)
+        nn.BatchNorm2d(inp),
+        nn.PReLU(inp),
+        nn.Conv2d(inp, out, kernel_size=1, stride=1, padding=0, bias=False),
+        nn.BatchNorm2d(out),
+        nn.PReLU(out)
+    )
+
+
+def mobile_net_v1(c, inference):
+    layers = [conv_bn(c, 32),
+              nn.AvgPool2d(kernel_size=2, stride=2, padding=1),
+              conv_dw(32, 64),
+              conv_dw(64, 128),
+              conv_dw(128, 128),
+              nn.AvgPool2d(kernel_size=2, stride=2, padding=1),
+              conv_dw(128, 256),
+              conv_dw(256, 512),
+              conv_dw(512, 512),
+              nn.AvgPool2d(kernel_size=2, stride=2, padding=1),
+              conv_dw(512, 512),
+              conv_dw(512, 512),
+              nn.AvgPool2d(kernel_size=2, stride=2, padding=1),
+              conv_dw(512, 1024),
+              conv_dw(1024, 1024)]
     if inference:
-        return layers[:-4]
-    return layers[:-1]
+        return layers[:-3]
+    return layers
 
 
 def multibox(n_classes, inference):
@@ -204,7 +170,7 @@ def build_ssd(rank, ssd_settings, inference=False, onnx=False):
 
     input_dimensions = ssd_settings['input_dimensions']
 
-    base = resnet(input_dimensions[0], inference)
+    base = mobile_net_v1(input_dimensions[0], inference)
     head = multibox(ssd_settings['n_classes'], inference)
 
     return SSD(base, head, ssd_settings, inference, rank, onnx)

@@ -57,8 +57,8 @@ ssd_settings:
  feature_maps:
   - phi: 46
     eta: 44
-  - phi: 22
-    eta: 21
+  - phi: 24
+    eta: 23
  input_dimensions:
   - 3
   - 340
