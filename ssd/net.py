@@ -100,11 +100,13 @@ class SSD(nn.Module):
                         if m.in_channels == 3:
                             tmp = m.weight.data.clone()
                             m.weight.data.copy_(uniform_quantization(tmp, 16))
+                        init.zeros_(m.bias.data)
             for o in [self.loc, self.cnf, self.reg]:
                 for m in o.modules():
                     if isinstance(m, nn.Conv2d):
                         tmp = m.weight.data.clone()
                         m.weight.data.copy_(uniform_quantization(tmp, 16))
+                        init.zeros_(m.bias.data)
             return True
         return False
 
