@@ -2,6 +2,7 @@ import os
 import torch
 import torch.nn as nn
 
+from dropblock import DropBlock2D
 from torch.cuda.amp import autocast
 from ssd.layers import *
 from ssd.qutils import uniform_quantization
@@ -100,21 +101,20 @@ class SSD(nn.Module):
                         if m.in_channels == 3:
                             tmp = m.weight.data.clone()
                             m.weight.data.copy_(uniform_quantization(tmp, 16))
-                        init.zeros_(m.bias.data)
             for o in [self.loc, self.cnf, self.reg]:
                 for m in o.modules():
                     if isinstance(m, nn.Conv2d):
                         tmp = m.weight.data.clone()
                         m.weight.data.copy_(uniform_quantization(tmp, 16))
-                        init.zeros_(m.bias.data)
             return True
         return False
 
 
-def conv_bn(inp, oup):
+def conv_bn(inp, out):
     return nn.Sequential(
         nn.Conv2d(inp, out, kernel_size=3, stride=1, padding=1, bias=False),
         nn.BatchNorm2d(out),
+        DropBlock2D(block_size=3, drop_prob=0.1),
         nn.PReLU(out)
     )
 
@@ -122,7 +122,7 @@ def conv_bn(inp, oup):
 def conv_dw(inp, out):
     return nn.Sequential(
         nn.Conv2d(inp, inp, kernel_size=3, stride=1, padding=1, bias=False,
-                  groups=inp)
+                  groups=inp),
         nn.BatchNorm2d(inp),
         nn.PReLU(inp),
         nn.Conv2d(inp, out, kernel_size=1, stride=1, padding=0, bias=False),

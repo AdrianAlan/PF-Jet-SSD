@@ -227,7 +227,6 @@ def reduce_tensor(loc, cls, reg):
 def weights_init(m):
     if isinstance(m, nn.Conv2d):
         init.xavier_uniform_(m.weight.data)
-        init.zeros_(m.bias.data)
 
 
 def setup(rank, world_size):
