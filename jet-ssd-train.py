@@ -209,6 +209,7 @@ def execute(rank, world_size, name, quantized, dataset, output, training_pref,
 
 def is_first_or_last(layer):
     return (isinstance(layer, nn.Conv2d)
+            and layer.kernel_size == (3, 3)
             and layer.in_channels > 3
             and layer.out_channels > 4)
 
