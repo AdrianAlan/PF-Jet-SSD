@@ -7,7 +7,7 @@ import torch.nn as nn
 import yaml
 
 from ssd.net import build_ssd
-from utils import IsValidFile, set_logging
+from utils import *
 
 
 def to_numpy(t):
@@ -43,7 +43,13 @@ if __name__ == '__main__':
 
     logger.info('Prepare inputs')
     in_dim = ssd_settings['input_dimensions']
-    dummy_input = torch.unsqueeze(torch.randn(in_dim, requires_grad=True), 0)
+    jet_size = ssd_settings['object_size']
+    workers = config['evaluation_pref']['workers']
+    loader = get_data_loader(config['dataset']['validation'][0], int(1),
+                             workers, in_dim, jet_size, shuffle=False)
+    batch_iterator = iter(loader)
+    dummy_input, _ = next(batch_iterator)
+    dummy_input = dummy_input.cpu()
 
     logger.info('Export as ONNX model')
     torch.onnx.export(net,
