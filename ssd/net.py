@@ -50,7 +50,8 @@ class SSD(nn.Module):
 
         # Add base network
         for i, layer in enumerate(self.mobilenet):
-            layer = layer.cuda(self.rank)
+            if self.rank != 'cpu':
+                layer = layer.cuda(self.rank)
             x = layer(x)
             if i == 11:
                 sources.append(self.l2norm_1(x))
