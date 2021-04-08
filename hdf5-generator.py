@@ -262,6 +262,8 @@ class HDF5Generator:
                                    phis[mask],
                                    pts[mask],
                                    scores[mask]):
+                if e < self.edges_eta[0] or e > self.edges_eta[-1]:
+                    continue
                 e = np.argmax(self.edges_eta >= e) - 1
                 p = np.argmax(self.edges_phi >= p) - 1
                 baselines = np.vstack((baselines, [jid, e, p, pt, s]))
@@ -277,7 +279,7 @@ class HDF5Generator:
                                    etas[np.isin(pids, pid)],
                                    phis[np.isin(pids, pid)],
                                    pts[np.isin(pids, pid)]):
-                if s != 22:
+                if s != 22 or e < self.edges_eta[0] or e > self.edges_eta[-1]:
                     continue
                 e = np.argmax(self.edges_eta >= e) - 1
                 p = np.argmax(self.edges_phi >= p) - 1
