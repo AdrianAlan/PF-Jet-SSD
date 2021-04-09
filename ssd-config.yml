@@ -40,16 +40,6 @@ evaluation_pref:
  workers: 0
 
 inference_pref:
-  batch_sizes:
-   - 1
-   - 2
-   - 4
-   - 8
-   - 16
-   - 32
-   - 64
-   - 100
-  rank: 0
   samples: 300
 
 ssd_settings:
