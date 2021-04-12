@@ -12,6 +12,7 @@ import torch.nn as nn
 
 from matplotlib.lines import Line2D
 from matplotlib.offsetbox import OffsetImage
+import matplotlib.font_manager
 from sklearn.metrics import average_precision_score, precision_recall_curve
 from ssd.generator import CalorimeterJetDataset
 from ssd.layers import *
@@ -327,17 +328,24 @@ class Plotting():
             fig.savefig('%s/delta-%s' % (self.save_dir, n))
             plt.close(fig)
 
-    def draw_barchart(self, x, y, label, ylabel, xlabel='Batch size [events]',
+    def draw_barchart(self, x, y, label, ylabel,
+                      xlabel='Batch size [events]',
                       save_name='inference'):
         """Plots errobars as a function of batch size"""
         fig, ax = plt.subplots()
 
+        width = 0.35
         groups = np.arange(len(x))
+
         ax.set_xlabel(xlabel, horizontalalignment='right', x=1.0)
         ax.set_ylabel(ylabel, horizontalalignment='right', y=1.0)
-        ax.bar(groups, y, label=label, color=self.colors[0]['shade_500'])
+        ax.bar(groups - width/2, y[0], label=label[0], width=width,
+               color=self.colors[0]['shade_500'])
+        ax.bar(groups + width/2, y[1], label=label[1], width=width,
+               color=self.colors[1]['shade_500'])
         ax.set_xticks(groups)
         ax.set_xticklabels(x)
+        ax.set_yscale('log')
         ax.legend(bbox_to_anchor=(0, 1), loc='lower left')
 
         fig.tight_layout()
