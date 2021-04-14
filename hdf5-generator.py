@@ -3,10 +3,10 @@ import h5py
 import numpy as np
 import os
 import simplejson as json
-import uproot
+import uproot3 as uproot
 import warnings
 
-from uproot_methods import TLorentzVectorArray
+from uproot3_methods import TLorentzVectorArray
 from utils import IsReadableDir
 from tqdm import tqdm
 

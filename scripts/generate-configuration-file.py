@@ -1,5 +1,5 @@
 import argparse
-import uproot
+import uproot3 as uproot
 import simplejson as json
 
 from os import listdir
