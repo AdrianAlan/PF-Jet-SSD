@@ -50,7 +50,7 @@ def execute(model, dataset, im_size, obj_size, conf_threshold=10**-6,
 
             # Sort by confidence
             all_detections = all_detections[(-all_detections[:, 3]).argsort()]
-            all_baselines = all_baselines[(all_baselines[:, 3]).argsort()]
+            all_baselines = all_baselines[(-all_baselines[:, 3]).argsort()]
 
             for t in targets:
                 detected, dbaseline = False, False

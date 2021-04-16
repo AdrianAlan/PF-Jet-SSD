@@ -144,7 +144,7 @@ class CalorimeterJetDataset(torch.utils.data.Dataset):
         base[:, 2] = base_reshaped[:, 0] + 1
 
         # Add score
-        base[:, 3] = base_reshaped[:, 4]
+        base[:, 3] = 1 - base_reshaped[:, 4]
 
         # Add truth
         base[:, 4] = 0
