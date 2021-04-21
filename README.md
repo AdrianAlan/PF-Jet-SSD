@@ -5,7 +5,7 @@ This repository contains components of the Jet SSD study. Feel free to reproduce
 ## Setup
 The environment is specified in the `environment.yml` file. It can be setup like this:
 ```
-conda env create -f environment.yml
+conda env create -f misc/environment.yml
 conda activate jetssd
 ```
 
