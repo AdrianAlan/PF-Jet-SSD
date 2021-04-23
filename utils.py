@@ -48,9 +48,9 @@ class Plotting():
 
         self.save_dir = save_dir
         self.line_styles = [(0, (2, 2)), (0, ()), (0, (2, 2))]
-        self.legend = ['Full Precision Network',
-                       'Ternary Weight Network',
-                       r'Baseline: m, $\tau$']
+        self.legend = ['Full Precision',
+                       'Ternary Weight',
+                       r'Baseline: AK8+$m_{SOFTDROP}$+$\taui_{21}/\tau{32}$']
         self.shades = ['shade_400', 'shade_900', 'shade_200']
         self.ref_recall = ref_recall
 
@@ -101,73 +101,27 @@ class Plotting():
         """Plots the precision recall curve"""
 
         fig, ax = plt.subplots()
-        plt.xlabel("Recall (TPR)", horizontalalignment='right', x=1.0)
-        plt.ylabel("Precision (PPV)", horizontalalignment='right', y=1.0)
-
         for i, results in enumerate([results_fp, results_tp, results_base]):
-            for x, name in enumerate(jet_names):
+            model_name = self.legend[i]
+            for x, jet_name in enumerate(jet_names):
                 score = results[x][:, 3].cpu().numpy()
                 truth = results[x][:, 4].cpu().numpy()
                 precision, recall, _ = precision_recall_curve(truth, score)
                 ap = average_precision_score(truth, score)
-
-                # Helper line
-                ref_precision = np.round(
-                    precision[(np.abs(recall - self.ref_recall)).argmin()], 2)
-
-                ax.plot([0, self.ref_recall], [ref_precision, ref_precision],
-                        linestyle=self.line_styles[0],
-                        linewidth=0.8,
-                        alpha=0.5,
-                        color=self.color_palette['grey']['shade_500'])
-                plt.plot(recall[1:], precision[1:],
+                label = '{0}: {1} jets, AP: {2:.3f}'.format(model_name
+                                                            jet_name, ap)
+                plt.plot(recall[1:],
+                         precision[1:],
                          linestyle=self.line_styles[i],
                          color=self.colors[x][self.shades[i]],
-                         label='{0}: {1} jets, AP: {2:.3f}'.format(
-                                 self.legend[i], name, ap))
+                         label=label)
 
-        # Helper line c.d.
-        plt.xticks(list(plt.xticks()[0]) + [self.ref_recall])
-        plt.yticks(list(set([0.1, 0.3, 0.5, 0.7, 0.9, 1])))
-
-        ax.set_xlim(0, 1)
+        plt.xlabel("Recall (TPR)", horizontalalignment='right', x=1.0)
+        plt.ylabel("Precision (PPV)", horizontalalignment='right', y=1.0)
+        plt.xticks([0.2, 0.4, 0.6, 0.8, 1])
+        plt.yticks([0.2, 0.4, 0.6, 0.8, 1])
         ax.legend(loc='upper center', bbox_to_anchor=(0.25, -0.1))
         fig.savefig('%s/precision-recall-curve' % self.save_dir)
-        plt.close(fig)
-
-        self.draw_precision_recall_zoom(results_fp, results_tp, results_base,
-                                        jet_names)
-
-    def draw_precision_recall_zoom(self, results_fp, results_tp, results_base,
-                                   jet_names):
-        """Plots the precision recall curve"""
-
-        fig, ax = plt.subplots()
-        plt.xlabel("Recall (TPR)", horizontalalignment='right', x=1.0)
-        plt.ylabel("Precision (PPV)", horizontalalignment='right', y=1.0)
-
-        for i, results in enumerate([results_fp, results_tp, results_base]):
-            for x, name in enumerate(jet_names):
-                score = results[x][:, 3].cpu().numpy()
-                truth = results[x][:, 4].cpu().numpy()
-                precision, recall, _ = precision_recall_curve(truth, score)
-                ap = average_precision_score(truth, score)
-
-                plt.plot(recall[1:], 1 - precision[1:],
-                         linestyle=self.line_styles[i],
-                         color=self.colors[x][self.shades[i]],
-                         label='{0}: {1} jets, AP: {2:.3f}'.format(
-                                 self.legend[i], name, ap))
-
-        plt.xticks(list(plt.xticks()[0]) + [self.ref_recall])
-
-        ax.set_xlim(0, self.ref_recall)
-        ax.set_yscale("log")
-        plt.gca().invert_yaxis()
-        plt.gca().set_yticklabels(1-plt.gca().get_yticks())
-
-        ax.legend(loc='upper center', bbox_to_anchor=(0.25, -0.1))
-        fig.savefig('%s/precision-recall-curve-zoom' % self.save_dir)
         plt.close(fig)
 
     def draw_precision_details(self, results_fp, results_tp, results_base,
@@ -209,8 +163,7 @@ class Plotting():
                 binning = np.linspace(0, 1, nbins)[1:]
                 ax.set_xlim([0, 1])
 
-            for x, _ in enumerate(jet_names):
-
+            for x, jet_name in enumerate(jet_names):
                 for index, result in enumerate([results_fp,
                                                 results_tp,
                                                 results_base]):
