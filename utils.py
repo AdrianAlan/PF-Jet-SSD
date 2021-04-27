@@ -195,7 +195,7 @@ class Plotting():
                     ax.plot(xvalues, v,
                             color=color,
                             marker=self.markers[index],
-                            linestyle=self.line_styles[index],
+                            linewidth=0,
                             markersize=5)
 
             # Add legend
@@ -262,7 +262,7 @@ class Plotting():
                     ax.plot(binning, v,
                             color=color,
                             marker=self.markers[q],
-                            linestyle=self.line_styles[q],
+                            linewidth=0,
                             markersize=5)
             ax.set_xlim([min_pt, max_pt*1.2])
 
