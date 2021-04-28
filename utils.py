@@ -50,7 +50,7 @@ class Plotting():
         self.line_styles = [(0, (2, 2)), (0, ()), (0, (2, 2))]
         self.legend = ['Full Precision',
                        'Ternary Weight',
-                       r'Baseline: AK8+$m_{SOFTDROP}$+$\taui_{21}/\tau{32}$']
+                       r'Baseline AK8+$m_{SOFTDROP}$+$\tau_{21}/\tau_{32}$']
         self.shades = ['shade_400', 'shade_900', 'shade_200']
         self.ref_recall = ref_recall
 
@@ -116,8 +116,8 @@ class Plotting():
                          color=self.colors[x][self.shades[i]],
                          label=label)
 
-        plt.xlabel("Recall (TPR)", horizontalalignment='right', x=1.0)
-        plt.ylabel("Precision (PPV)", horizontalalignment='right', y=1.0)
+        plt.xlabel('Recall (TPR)', horizontalalignment='right', x=1.0)
+        plt.ylabel('Precision (PPV)', horizontalalignment='right', y=1.0)
         plt.xticks([0.2, 0.4, 0.6, 0.8, 1])
         plt.yticks([0.2, 0.4, 0.6, 0.8, 1])
         ax.legend(loc='upper center', bbox_to_anchor=(0.25, -0.1))
@@ -237,12 +237,12 @@ class Plotting():
                                              color=self.colors[i]['shade_800'],
                                              label='%s jets' % jet))
 
-        for i, l, n in [(2, r'$\mu|\eta_{SSD}-\eta_{GT}|$ [rad]', 'eta'),
-                        (3, r'$\mu|\phi_{SSD}-\phi_{GT}|$ [rad]', 'phi'),
-                        (4, r'$\mu\frac{|Pt_{SSD}-Pt_{GT}|}{Pt_{GT}}$', 'pt')]:
+        for i, l, n in [(2, r'$\mu|\eta-\eta^{GEN}|$ [rad]', 'eta'),
+                        (3, r'$\mu|\phi-\phi^{GEN}|$ [rad]', 'phi'),
+                        (4, r'$\mu\frac{|p_T-p_T^{GEN}|}{p_T^{GEN}}$', 'pt')]:
 
             fig, ax = plt.subplots()
-            plt.xlabel('$p_T$ [GeV]', horizontalalignment='right', x=1.0)
+            plt.xlabel('$p_T^{GEN}$ [GeV/s]', horizontalalignment='right', x=1.0)
             plt.ylabel(l, horizontalalignment='right', y=1.0)
             for x, _ in enumerate(jet_names):
 
