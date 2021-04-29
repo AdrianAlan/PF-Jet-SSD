@@ -211,7 +211,7 @@ if __name__ == '__main__':
                                jet_names)
     plot.draw_precision_details(plotting_results[0],
                                 plotting_results[1],
-                                results_baseline,
+                                plotting_deltas[0],
                                 jet_names)
     plot.draw_loc_delta(plotting_deltas[0],
                         plotting_deltas[1],

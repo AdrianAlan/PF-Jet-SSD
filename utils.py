@@ -124,49 +124,44 @@ class Plotting():
         fig.savefig('%s/precision-recall-curve' % self.save_dir)
         plt.close(fig)
 
-    def draw_precision_details(self, results_fp, results_tp, results_base,
-                               jet_names, nbins=11):
-        """Plots precision at fixed recall as a function of pT"""
+    def draw_precision_details(self, results_fp, results_tp, deltas, jet_names, nbins=11):
+        """Plots the precision histogram at fixed recall"""
 
         legend_helper_network, legend_helper_type = [], []
-        for i, name in enumerate(self.legend):
+        for i in range(2):
             legend_helper_network.append(Line2D([], [],
                                                 linewidth=0,
                                                 markersize=5,
                                                 marker=self.markers[i],
                                                 color='black',
-                                                label=name))
-        for i, jet in enumerate(jet_names):
+                                                label=self.legend[i]))
+
+        for i, jet_name in enumerate(jet_names):
             legend_helper_type.append(Line2D([], [],
                                              linewidth=2,
                                              color=self.colors[i]['shade_800'],
-                                             label='%s jets' % jet))
+                                             label='{} jets'.format(jet_name)))
 
-        for i, l, n in [(0, r'$\eta$', 'eta'),
-                        (1, r'$\phi$', 'phi'),
-                        (5, r'$pT [GeV]$', 'pt')]:
+        for i, label, name, multiplier, subtrahend in [(0, r'$\eta$', 'eta', 6, 3),
+                                                       (1, r'$\phi$ [$\degree$]', 'phi', 360, 0),
+                                                       (5, r'$p_T^{SSD}$ [GeV/s]', 'pt', 1, 0)]:
 
             fig, ax = plt.subplots()
-            plt.xlabel(l, horizontalalignment='right', x=1.0)
+            plt.xlabel(label, horizontalalignment='right', x=1.0)
             plt.ylabel("Precision (PPV)", horizontalalignment='right', y=1.0)
 
             # Fix binning across classes
             if i == 5:
-                v = np.array([])
-                for x, _ in enumerate(jet_names):
-                    v = np.append(v, results_base[x][:, i].cpu().numpy())
-                max_pt = np.max(v)
-                binning = np.logspace(2, np.log10(max_pt), nbins)[1:]
-                ax.set_xlim([100, max_pt*1.2])
+                d = deltas.cpu().numpy()
+                min_pt, max_pt = np.min(d[:, 1]), np.max(d[:, 1])
+                binning = np.logspace(np.log10(min_pt), np.log10(max_pt), nbins)[1:]
                 ax.set_xscale("log")
             else:
                 binning = np.linspace(0, 1, nbins)[1:]
                 ax.set_xlim([0, 1])
 
             for x, jet_name in enumerate(jet_names):
-                for index, result in enumerate([results_fp,
-                                                results_tp,
-                                                results_base]):
+                for index, result in enumerate([results_fp, results_tp]):
                     color = self.colors[x][self.shades[index]]
                     score = result[x][:, 3].cpu().numpy()
                     truth = result[x][:, 4].cpu().numpy()
@@ -197,6 +192,14 @@ class Plotting():
                             marker=self.markers[index],
                             linewidth=0,
                             markersize=5)
+            if i == 0:
+                ticks = (ax.get_xticks()*multiplier-subtrahend)
+                ticks = np.round_(ticks, decimals=2)
+                plt.xticks(ax.get_xticks(), ticks)
+            if i == 1:
+                ticks = (ax.get_xticks()*multiplier-subtrahend)
+                ticks = ticks.astype(np.int32)
+                plt.xticks(ax.get_xticks(), ticks)
 
             # Add legend
             plt.gca().add_artist(plt.legend(handles=legend_helper_type,
