@@ -108,7 +108,7 @@ class Plotting():
                 truth = results[x][:, 4].cpu().numpy()
                 precision, recall, _ = precision_recall_curve(truth, score)
                 ap = average_precision_score(truth, score)
-                label = '{0}: {1} jets, AP: {2:.3f}'.format(model_name
+                label = '{0}: {1} jets, AP: {2:.3f}'.format(model_name,
                                                             jet_name, ap)
                 plt.plot(recall[1:],
                          precision[1:],
@@ -121,7 +121,7 @@ class Plotting():
         plt.xticks([0.2, 0.4, 0.6, 0.8, 1])
         plt.yticks([0.2, 0.4, 0.6, 0.8, 1])
         ax.legend(loc='upper center', bbox_to_anchor=(0.25, -0.1))
-        fig.savefig('%s/precision-recall-curve' % self.save_dir)
+        fig.savefig('{}/precision-recall-curve'.format(self.save_dir))
         plt.close(fig)
 
     def draw_precision_details(self, results_fp, results_tp, deltas, jet_names, nbins=11):
@@ -209,7 +209,7 @@ class Plotting():
                                             loc='upper left',
                                             bbox_to_anchor=(0.2, -0.1)))
 
-            fig.savefig('{}/precision-{}'.format(self.save_dir, n))
+            fig.savefig('{}/precision-{}'.format(self.save_dir, name))
             plt.close(fig)
 
     def draw_loc_delta(self, results_fp, results_tp, results_base,
