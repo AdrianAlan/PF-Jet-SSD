@@ -21,8 +21,8 @@ if __name__ == '__main__':
                        ['FP32 GPU', 'FP16/TWN GPU (Not optimized)'],
                        ylabel='Latency [ms]',
                        save_name='inference-latency')
-    plot.draw_barchart([1, 2, 4, 8, 16, 32, 64],
+    plot.draw_barchart(['$2^0$', '$2^1$', '$2^2$', '$2^3$', '$2^4$', '$2^5$', '$2^6$', '$2^7$', '$2^8$'],
                        [throughput32, throughput16],
-                       ['FP32 GPU', 'FP16/TWN GPU (Not optimized)'],
+                       ['FP32 GPU', 'FP16/TWN GPU'],
                        ylabel='Throughput [eps]',
                        save_name='inference-throughput')
