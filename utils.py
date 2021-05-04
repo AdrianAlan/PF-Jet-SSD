@@ -124,7 +124,12 @@ class Plotting():
         fig.savefig('{}/precision-recall-curve'.format(self.save_dir))
         plt.close(fig)
 
-    def draw_precision_details(self, results_fp, results_tp, deltas, jet_names, nbins=11):
+    def draw_precision_details(self,
+                               results_fp,
+                               results_tp,
+                               deltas,
+                               jet_names,
+                               nbins=11):
         """Plots the precision histogram at fixed recall"""
 
         legend_helper_network, legend_helper_type = [], []
@@ -142,19 +147,21 @@ class Plotting():
                                              color=self.colors[i]['shade_800'],
                                              label='{} jets'.format(jet_name)))
 
-        for i, label, name, multiplier, subtrahend in [(0, r'$\eta$', 'eta', 6, 3),
-                                                       (1, r'$\phi$ [$\degree$]', 'phi', 360, 0),
-                                                       (5, r'$p_T^{SSD}$ [GeV/s]', 'pt', 1, 0)]:
+        for i, l, name, mul, sub in [(0, r'$\eta$', 'eta', 6, 3),
+                                     (1, r'$\phi$ [$\degree$]', 'phi', 360, 0),
+                                     (5, r'$p_T^{SSD}$ [GeV/s]', 'pt', 1, 0)]:
 
             fig, ax = plt.subplots()
-            plt.xlabel(label, horizontalalignment='right', x=1.0)
+            plt.xlabel(l, horizontalalignment='right', x=1.0)
             plt.ylabel("Precision (PPV)", horizontalalignment='right', y=1.0)
 
             # Fix binning across classes
             if i == 5:
                 d = deltas.cpu().numpy()
                 min_pt, max_pt = np.min(d[:, 1]), np.max(d[:, 1])
-                binning = np.logspace(np.log10(min_pt), np.log10(max_pt), nbins)[1:]
+                binning = np.logspace(np.log10(min_pt),
+                                      np.log10(max_pt),
+                                      nbins)[1:]
                 ax.set_xscale("log")
             else:
                 binning = np.linspace(0, 1, nbins)[1:]
@@ -193,11 +200,11 @@ class Plotting():
                             linewidth=0,
                             markersize=5)
             if i == 0:
-                ticks = (ax.get_xticks()*multiplier-subtrahend)
+                ticks = (ax.get_xticks()*mul-sub)
                 ticks = np.round_(ticks, decimals=2)
                 plt.xticks(ax.get_xticks(), ticks)
             if i == 1:
-                ticks = (ax.get_xticks()*multiplier-subtrahend)
+                ticks = (ax.get_xticks()*mul-sub)
                 ticks = ticks.astype(np.int32)
                 plt.xticks(ax.get_xticks(), ticks)
 
@@ -245,7 +252,9 @@ class Plotting():
                         (4, r'$\mu\frac{|p_T-p_T^{GEN}|}{p_T^{GEN}}$', 'pt')]:
 
             fig, ax = plt.subplots()
-            plt.xlabel('$p_T^{GEN}$ [GeV/s]', horizontalalignment='right', x=1.0)
+            plt.xlabel('$p_T^{GEN}$ [GeV/s]',
+                       horizontalalignment='right',
+                       x=1.0)
             plt.ylabel(l, horizontalalignment='right', y=1.0)
             for x, _ in enumerate(jet_names):
 
