@@ -61,10 +61,6 @@ class Plotting():
                        self.color_palette['yellow']]
         self.markers = ["v", "D"]
 
-    def get_logo(self):
-        return OffsetImage(plt.imread('./plots/hls4mllogo.jpg', format='jpg'),
-                           zoom=0.08)
-
     def draw_loss(self, data_train, data_val, quantized,
                   keys=['Localization', 'Classification', 'Regression']):
         """Plots the training and validation loss"""
@@ -85,11 +81,7 @@ class Plotting():
                      color=color['shade_400'])
 
         ax.legend()
-        ax.text(0, 1.02, 'CMS',
-                weight='bold',
-                transform=ax.transAxes,
-                color=self.color_palette['grey']['shade_900'],
-                fontsize=13)
+
         if quantized:
             name = 'ternary'
         else:
@@ -129,23 +121,13 @@ class Plotting():
         # Helper line c.d.
         plt.xticks(list(plt.xticks()[0]) + [self.ref_recall])
         plt.ylim(0.5, 1)
-        plt.yticks(list(set([0.5, 0.7, 0.9, 1] + ref_precisions)))
+        plt.yticks(list(set([0.5, 0.7, 0.9, 1])))
         ax.plot([0.3, 0.3], [0, np.max(ref_precisions)],
                 linestyle=self.line_styles[1],
                 alpha=0.5,
                 color=self.color_palette['grey']['shade_500'])
 
         ax.legend(loc='upper center', bbox_to_anchor=(0.25, -0.1))
-
-        ax.text(0, 1.02, 'CMS',
-                weight='bold',
-                transform=ax.transAxes,
-                color=self.color_palette['grey']['shade_900'],
-                fontsize=13)
-
-        ab = AnnotationBbox(self.get_logo(), [0, 1], xybox=(0.12, 1.085),
-                            frameon=False)
-        ax.add_artist(ab)
 
         fig.savefig('%s/pr-curve' % self.save_dir)
         plt.close(fig)
@@ -175,7 +157,7 @@ class Plotting():
 
                 fig, ax = plt.subplots()
                 cst_lgd = []
-                plt.xlabel('$p_T$ [GeV]', horizontalalignment='right', x=1.0)
+                plt.xlabel('$p_T$ [GeV/c]', horizontalalignment='right', x=1.0)
                 plt.ylabel(l, horizontalalignment='right', y=1.0)
 
                 for q, d in enumerate(data):
@@ -215,19 +197,7 @@ class Plotting():
                                whis=0)
 
                 ax.set_xscale("log")
-                ax.annotate('CMS',
-                            xy=(ax.get_xlim()[0], ax.get_ylim()[1]),
-                            transform=ax.transAxes,
-                            horizontalalignment='left',
-                            color=self.color_palette['grey']['shade_900'],
-                            fontsize=13,
-                            weight='bold')
 
-                ab = AnnotationBbox(self.get_logo(),
-                                    xy=(ax.get_xlim()[0], ax.get_ylim()[1]),
-                                    box_alignment=(-0.5, 0.3),
-                                    frameon=False)
-                ax.add_artist(ab)
                 ax.legend(handles=cst_lgd, loc='upper left',
                           bbox_to_anchor=(0, -0.1))
 
@@ -248,21 +218,6 @@ class Plotting():
                     markersize=5,
                     color=self.colors[0]['shade_500'])
 
-        cms = ax.text(0, 1.02, 'CMS',
-                      weight='bold',
-                      transform=ax.transAxes,
-                      color=self.color_palette['grey']['shade_900'],
-                      fontsize=13)
-
-        plt.gcf().canvas.draw()
-        bbox = cms.get_window_extent().inverse_transformed(plt.gca().transData)
-        ab = AnnotationBbox(self.get_logo(), (x[0], y[0]),
-                            xybox=(1.1*bbox.x1, (bbox.y1-bbox.y0)/2 + bbox.y0),
-                            xycoords='data',
-                            boxcoords='data',
-                            box_alignment=(0., 0.5),
-                            frameon=False)
-        ax.add_artist(ab)
         fig.savefig('%s/inference-%s' % (self.save_dir, name))
         plt.close(fig)
 

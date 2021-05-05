@@ -7,15 +7,15 @@ savefig.bbox: tight
 
 image.cmap: viridis
 
-font.family: DejaVu Sans
-font.sans-serif: DejaVuSans-ExtraLight
+font.family: sans-serif
+font.sans-serif: Liberation Sans
 
 axes.edgecolor: (0.2,0.25,0.29)
 axes.grid: True
-axes.labelsize: 14
+axes.labelsize: 18
 axes.linewidth: 0.8
-axes.spines.top: False
-axes.spines.right: False
+axes.spines.top: True
+axes.spines.right: True
 axes.spines.left: True
 axes.spines.bottom: True
 axes.titlesize: 14
@@ -26,7 +26,7 @@ grid.alpha: 0.3
 grid.linestyle: --
 grid.linewidth: 0.6
 
-legend.fontsize: 10
+legend.fontsize: 14
 legend.frameon: False
 legend.handlelength: 0.7
 
@@ -34,15 +34,15 @@ lines.linewidth: 1.2
 
 xtick.color: (0.2,0.25,0.29)
 xtick.direction: in
-xtick.labelsize: 10
+xtick.labelsize: 18
 xtick.major.size: 10
 xtick.minor.size: 5
-xtick.top: False
-xtick.minor.visible: False
+xtick.top: True
+xtick.minor.visible: True
 
 ytick.color: (0.2,0.25,0.29)
 ytick.direction: in
-ytick.labelsize: 10
+ytick.labelsize: 18
 ytick.major.size: 10
 ytick.minor.size: 5
 ytick.right: False
