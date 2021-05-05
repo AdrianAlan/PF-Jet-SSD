@@ -1,8 +1,10 @@
 import argparse
+import numpy as np
 import torch
 import time
 import yaml
 
+from numpy.testing import assert_almost_equal as is_equal
 from ssd.net import build_ssd
 from utils import *
 
@@ -136,12 +138,11 @@ if __name__ == '__main__':
         logger.info('Throughput: {0:.2f} eps'.format(throughput))
 
         if not args.suppress:
-            t = list(map(to_numpy, list(net(batch))))
+            desired = list(map(to_numpy, list(net(batch))))
             for i, task in enumerate(['Localization',
                                       'Classification',
                                       'Regression']):
-                np.testing.assert_allclose(t[i],
-                                           host_out[i].reshape(t[i].shape),
-                                           rtol=1e-03,
-                                           atol=1e-05)
+                is_equal(host_out[i].reshape(desired[i].shape),
+                         desired[i],
+                         decimal=4)
                 logger.info('{} task: OK'.format(task))
