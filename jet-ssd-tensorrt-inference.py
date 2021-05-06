@@ -23,8 +23,8 @@ if __name__ == '__main__':
     parser.add_argument('model', type=str, help='Input model name')
     parser.add_argument('-b', '--batchsize', type=int,
                         help='Batch size', default=1)
-    parser.add_argument('-t', '--ternary', action='store_true',
-                        help='Quasi-TWN optimization')
+    parser.add_argument('--fp16', action='store_true',
+                        help='Run network in FP16')
     parser.add_argument('-s', '--suppress', action='store_true',
                         help='Suppress checks')
     parser.add_argument('-c', '--config', action=IsValidFile, type=str,
@@ -82,7 +82,7 @@ if __name__ == '__main__':
         profile.set_shape("input", size, size, size)
         cfg.add_optimization_profile(profile)
 
-        if args.ternary:
+        if args.fp16:
             cfg.set_flag(trt.BuilderFlag.FP16)
             cfg.set_flag(trt.BuilderFlag.STRICT_TYPES)
 
