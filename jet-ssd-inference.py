@@ -18,11 +18,11 @@ if __name__ == '__main__':
     plot = Plotting(save_dir=config['output']['plots'])
     plot.draw_barchart([1, 2, 4, 8, 16, 32, 64],
                        [latency32, latency16],
-                       ['FP32 GPU', 'FP16/TWN GPU (Not optimized)'],
+                       ['FP32 GPU', 'FP16 GPU (PTQ)'],
                        ylabel='Latency [ms]',
                        save_name='inference-latency')
     plot.draw_barchart(['$2^0$', '$2^1$', '$2^2$', '$2^3$', '$2^4$', '$2^5$', '$2^6$', '$2^7$', '$2^8$'],
                        [throughput32, throughput16],
-                       ['FP32 GPU', 'FP16/TWN GPU'],
+                       ['FP32 GPU', 'FP16 GPU (PTQ)'],
                        ylabel='Throughput [eps]',
                        save_name='inference-throughput')
