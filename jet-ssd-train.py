@@ -20,12 +20,8 @@ from ssd.layers.modules import MultiBoxLoss
 from ssd.generator import CalorimeterJetDataset
 from ssd.net import build_ssd
 from ssd.qutils import get_delta, get_alpha, to_ternary
-from utils import IsValidFile, Plotting, get_data_loader, set_logging
-
-
-def get_loss_info(x):
-    return ('Total loss {:.5f}, Localization {:.5f} ' +
-            'Classification {:.5f} Regresion {:.5f}').format(x.sum(), *x)
+from utils import AverageMeter, IsValidFile, Plotting, get_data_loader, \
+    set_logging
 
 
 def execute(rank, world_size, name, quantized, dataset, output, training_pref,
@@ -97,12 +93,19 @@ def execute(rank, world_size, name, quantized, dataset, output, training_pref,
     verobse = verbose and rank == 0
     train_loss, val_loss = torch.empty(3, 0), torch.empty(3, 0)
 
+    loc = AverageMeter('Localization', ':1.5f')
+    cls = AverageMeter('Classification', ':1.5f')
+    reg = AverageMeter('Regression', ':1.5f')
+
     for epoch in range(1, training_pref['max_epochs']+1):
 
         # Start model training
         if verbose:
             tr = trange(len(train_loader), file=sys.stdout)
-        all_epoch_loss = torch.zeros(3)
+
+        loc.reset()
+        cls.reset()
+        reg.reset()
         net.train()
 
         # Ternarize weights
@@ -128,6 +131,11 @@ def execute(rank, world_size, name, quantized, dataset, output, training_pref,
                 outputs = net(images)
                 l, c, r = criterion(outputs, targets)
                 loss = l + c + r
+
+            loc.update(l)
+            cls.update(c)
+            reg.update(r)
+
             scaler.scale(loss).backward()
 
             if quantized:
@@ -144,24 +152,25 @@ def execute(rank, world_size, name, quantized, dataset, output, training_pref,
                     if is_first_or_last(m):
                         m.weight.org.copy_(m.weight.data.clamp_(-1, 1))
 
-            all_epoch_loss += torch.tensor([l.item(), c.item(), r.item()])
-            av_epoch_loss = all_epoch_loss / (batch_index + 1)
-
-            info = 'Epoch {}, {}'.format(epoch, get_loss_info(av_epoch_loss))
+            info = 'Epoch {}, {}, {}, {}'.format(epoch, loc, cls, reg)
             if verbose:
                 tr.set_description(info)
                 tr.update(1)
 
         if rank == 0:
             logger.debug(info)
-        train_loss = torch.cat((train_loss, av_epoch_loss.unsqueeze(1)), 1)
+        tloss = torch.tensor([loc.avg, cls.avg, reg.avg]).unsqueeze(1)
+        train_loss = torch.cat((train_loss, tloss), 1)
         if verbose:
             tr.close()
 
         # Start model validation
         if verbose:
             tr = trange(len(val_loader), file=sys.stdout)
-        all_epoch_loss = torch.zeros(3)
+
+        loc.reset()
+        cls.reset()
+        reg.reset()
         net.eval()
 
         with torch.no_grad():
@@ -177,16 +186,20 @@ def execute(rank, world_size, name, quantized, dataset, output, training_pref,
                 outputs = net(images)
                 l, c, r = criterion(outputs, targets)
                 l, c, r = reduce_tensor(l.data, c.data, r.data)
-                all_epoch_loss += torch.tensor([l.item(), c.item(), r.item()])
-                av_epoch_loss = all_epoch_loss / (batch_index + 1)
-                info = 'Validation, {}'.format(get_loss_info(av_epoch_loss))
+
+                loc.update(l)
+                cls.update(c)
+                reg.update(r)
+
+                info = 'Validation, {}, {}, {}'.format(loc, cls, reg)
                 if verbose:
                     tr.set_description(info)
                     tr.update(1)
 
             if rank == 0:
                 logger.debug(info)
-            val_loss = torch.cat((val_loss, av_epoch_loss.unsqueeze(1)), 1)
+            vloss = torch.tensor([loc.avg, cls.avg, reg.avg]).unsqueeze(1)
+            val_loss = torch.cat((val_loss, vloss), 1)
             if verbose:
                 tr.close()
 
@@ -194,7 +207,7 @@ def execute(rank, world_size, name, quantized, dataset, output, training_pref,
                            val_loss.cpu().numpy(),
                            quantized=quantized)
 
-            if rank == 0 and cp_es(av_epoch_loss.sum(0), ssd_net):
+            if rank == 0 and cp_es(vloss.sum(0), ssd_net):
                 break
 
             dist.barrier()
@@ -215,14 +228,14 @@ def is_first_or_last(layer):
 
 
 def reduce_tensor(loc, cls, reg):
-    lo, cl, rg = loc.clone(), cls.clone(), reg.clone()
-    dist.all_reduce(lo)
-    dist.all_reduce(cl)
-    dist.all_reduce(rg)
-    lo /= int(os.environ['WORLD_SIZE'])
-    cl /= int(os.environ['WORLD_SIZE'])
-    rg /= int(os.environ['WORLD_SIZE'])
-    return lo, cl, rg
+    loc, cls, reg = loc.clone(), cls.clone(), reg.clone()
+    dist.all_reduce(loc)
+    dist.all_reduce(cls)
+    dist.all_reduce(reg)
+    loc /= int(os.environ['WORLD_SIZE'])
+    cls /= int(os.environ['WORLD_SIZE'])
+    reg /= int(os.environ['WORLD_SIZE'])
+    return loc, cls, reg
 
 
 def weights_init(m):
