@@ -24,8 +24,16 @@ from utils import AverageMeter, IsValidFile, Plotting, get_data_loader, \
     set_logging
 
 
-def execute(rank, world_size, name, quantized, dataset, output, training_pref,
-            ssd_settings, trained_model_path, verbose):
+def execute(rank,
+            world_size,
+            name,
+            ternary,
+            dataset,
+            output,
+            training_pref,
+            ssd_settings,
+            trained_model_path,
+            verbose):
 
     setup(rank, world_size)
 
@@ -33,7 +41,7 @@ def execute(rank, world_size, name, quantized, dataset, output, training_pref,
         logname = '{}/{}.log'.format(output['model'], name)
         logger = set_logging('Train_SSD', logname, verbose)
 
-    qbits = 8 if quantized else None
+    qbits = 8 if ternary else None
     ssd_settings['n_classes'] += 1
     plot = Plotting(save_dir=output['plots'])
 
@@ -109,7 +117,7 @@ def execute(rank, world_size, name, quantized, dataset, output, training_pref,
         net.train()
 
         # Ternarize weights
-        if quantized:
+        if ternary:
             for m in net.modules():
                 if is_first_or_last(m):
                     delta = get_delta(m.weight.data)
@@ -119,7 +127,7 @@ def execute(rank, world_size, name, quantized, dataset, output, training_pref,
         for batch_index, (images, targets) in enumerate(train_loader):
 
             # Ternarize weights
-            if quantized:
+            if ternary:
                 for m in net.modules():
                     if is_first_or_last(m):
                         m.weight.org = m.weight.data.clone()
@@ -138,7 +146,7 @@ def execute(rank, world_size, name, quantized, dataset, output, training_pref,
 
             scaler.scale(loss).backward()
 
-            if quantized:
+            if ternary:
                 for m in net.modules():
                     if is_first_or_last(m):
                         m.weight.data.copy_(m.weight.org)
@@ -147,7 +155,7 @@ def execute(rank, world_size, name, quantized, dataset, output, training_pref,
             scaler.update()
             optimizer.zero_grad()
 
-            if quantized:
+            if ternary:
                 for m in net.modules():
                     if is_first_or_last(m):
                         m.weight.org.copy_(m.weight.data.clamp_(-1, 1))
@@ -176,7 +184,7 @@ def execute(rank, world_size, name, quantized, dataset, output, training_pref,
         with torch.no_grad():
 
             # Ternarize weights
-            if quantized:
+            if ternary:
                 for m in net.modules():
                     if is_first_or_last(m):
                         m.weight.org = m.weight.data.clone()
@@ -205,14 +213,14 @@ def execute(rank, world_size, name, quantized, dataset, output, training_pref,
 
             plot.draw_loss(train_loss.cpu().numpy(),
                            val_loss.cpu().numpy(),
-                           quantized=quantized)
+                           quantized=ternary)
 
             if rank == 0 and cp_es(vloss.sum(0), ssd_net):
                 break
 
             dist.barrier()
 
-            if quantized:
+            if ternary:
                 for m in net.modules():
                     if is_first_or_last(m):
                         m.weight.org.copy_(m.weight.data)
