@@ -91,7 +91,10 @@ class Plotting():
         return OffsetImage(plt.imread('./plots/hls4mllogo.jpg', format='jpg'),
                            zoom=0.08)
 
-    def draw_loss(self, data_train, data_val, quantized,
+    def draw_loss(self,
+                  data_train,
+                  data_val,
+                  name='',
                   keys=['Localization', 'Classification', 'Regression']):
         """Plots the training and validation loss"""
 
@@ -111,11 +114,7 @@ class Plotting():
                      color=color['shade_400'])
 
         ax.legend()
-        if quantized:
-            name = 'twn'
-        else:
-            name = 'fpn'
-        fig.savefig('%s/loss-%s' % (self.save_dir, name))
+        fig.savefig('{}/loss-{}'.format(self.save_dir, name))
         plt.close(fig)
 
     def draw_precision_recall(self, results_fp, results_tp, results_base,

@@ -213,7 +213,7 @@ def execute(rank,
 
             plot.draw_loss(train_loss.cpu().numpy(),
                            val_loss.cpu().numpy(),
-                           quantized=ternary)
+                           name)
 
             if rank == 0 and cp_es(vloss.sum(0), ssd_net):
                 break
