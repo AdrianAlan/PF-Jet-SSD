@@ -7,9 +7,16 @@ from ssd import qutils
 
 class CalorimeterJetDataset(torch.utils.data.Dataset):
 
-    def __init__(self, rank, hdf5_source_path, input_dimensions, jet_size,
-                 qbits=None, return_baseline=False, return_pt=False,
-                 raw=False):
+    def __init__(self,
+                 rank,
+                 hdf5_source_path,
+                 input_dimensions,
+                 jet_size,
+                 cpu=False,
+                 raw=False,
+                 return_baseline=False,
+                 return_pt=False,
+                 qbits=None):
         """Generator for calorimeter and jet data"""
 
         self.rank = rank
@@ -18,10 +25,11 @@ class CalorimeterJetDataset(torch.utils.data.Dataset):
         self.width = input_dimensions[1]  # Width of input
         self.height = input_dimensions[2]  # Height of input
         self.size = jet_size / 2
-        self.qbits = qbits
-        self.return_pt = return_pt
+        self.cpu = cpu
         self.raw = raw
         self.return_baseline = return_baseline
+        self.return_pt = return_pt
+        self.qbits = qbits
 
     def __getitem__(self, index):
 
@@ -68,6 +76,8 @@ class CalorimeterJetDataset(torch.utils.data.Dataset):
             base_processed = self.process_baseline(base_raw)
             return calorimeter, labels_processed, base_processed, scaler
 
+        if self.cpu:
+            return calorimeter.cpu(), labels_processed.cpu()
         return calorimeter, labels_processed
 
     def __len__(self):
