@@ -426,7 +426,6 @@ def get_data_loader(hdf5_source_path,
                     raw=False,
                     return_baseline=False,
                     return_pt=False,
-                    qbits=None,
                     shuffle=True):
     dataset = CalorimeterJetDataset(rank,
                                     hdf5_source_path,
@@ -435,8 +434,7 @@ def get_data_loader(hdf5_source_path,
                                     cpu=cpu,
                                     raw=raw,
                                     return_baseline=return_baseline,
-                                    return_pt=return_pt,
-                                    qbits=qbits)
+                                    return_pt=return_pt)
     return DataLoader(dataset,
                       batch_size=batch_size,
                       collate_fn=collate_fn,

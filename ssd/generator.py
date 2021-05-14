@@ -15,8 +15,7 @@ class CalorimeterJetDataset(torch.utils.data.Dataset):
                  cpu=False,
                  raw=False,
                  return_baseline=False,
-                 return_pt=False,
-                 qbits=None):
+                 return_pt=False):
         """Generator for calorimeter and jet data"""
 
         self.rank = rank
@@ -29,7 +28,6 @@ class CalorimeterJetDataset(torch.utils.data.Dataset):
         self.raw = raw
         self.return_baseline = return_baseline
         self.return_pt = return_pt
-        self.qbits = qbits
 
     def __getitem__(self, index):
 
@@ -133,9 +131,6 @@ class CalorimeterJetDataset(torch.utils.data.Dataset):
 
         i = torch.cat((idx_channels, idx_eta, idx_phi), 0)
         v = energy / scaler
-
-        if self.qbits is not None:
-            v = qutils.uniform_quantization(v, self.qbits)
 
         pixels = torch.sparse.FloatTensor(i, v, torch.Size([self.channels,
                                                             self.width,

@@ -41,7 +41,6 @@ def execute(rank,
         logname = '{}/{}.log'.format(output['model'], name)
         logger = set_logging('Train_SSD', logname, verbose)
 
-    qbits = 8 if ternary else None
     ssd_settings['n_classes'] += 1
     plot = Plotting(save_dir=output['plots'])
 
@@ -53,8 +52,7 @@ def execute(rank,
                                    ssd_settings['object_size'],
                                    rank,
                                    shuffle=True,
-                                   return_pt=True,
-                                   qbits=qbits)
+                                   return_pt=True)
 
     val_loader = get_data_loader(dataset['validation'][rank],
                                  training_pref['batch_size_validation'],
@@ -63,8 +61,7 @@ def execute(rank,
                                  ssd_settings['object_size'],
                                  rank,
                                  shuffle=False,
-                                 return_pt=True,
-                                 qbits=qbits)
+                                 return_pt=True)
 
     # Build SSD network
     ssd_net = build_ssd(rank, ssd_settings).to(rank)
