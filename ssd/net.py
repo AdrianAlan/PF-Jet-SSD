@@ -5,7 +5,6 @@ import torch.nn as nn
 from dropblock import DropBlock2D
 from torch.cuda.amp import autocast
 from ssd.layers import *
-from ssd.qutils import uniform_quantization
 from torch.autograd import Variable
 
 
@@ -96,17 +95,6 @@ class SSD(nn.Module):
         if ext == '.pkl' or '.pth':
             state_dict = torch.load(file_path, map_location=lambda s, loc: s)
             self.load_state_dict(state_dict, strict=False)
-            for o in [self.mobilenet]:
-                for m in o.modules():
-                    if isinstance(m, nn.Conv2d):
-                        if m.in_channels == 3:
-                            tmp = m.weight.data.clone()
-                            m.weight.data.copy_(uniform_quantization(tmp, 16))
-            for o in [self.loc, self.cnf, self.reg]:
-                for m in o.modules():
-                    if isinstance(m, nn.Conv2d):
-                        tmp = m.weight.data.clone()
-                        m.weight.data.copy_(uniform_quantization(tmp, 16))
             return True
         return False
 
