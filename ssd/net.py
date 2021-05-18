@@ -21,25 +21,23 @@ class SSD(nn.Module):
         self.cnf = nn.ModuleList(head[1])
         self.reg = nn.ModuleList(head[2])
         self.l2norm_1 = L2Norm(512, 20)
-        self.priorbox = PriorBox()
         self.n_classes = ssd_settings['n_classes']
         self.top_k = ssd_settings['top_k']
         self.min_confidence = ssd_settings['confidence_threshold']
         self.nms = ssd_settings['nms']
-        config = {'min_dim': ssd_settings['input_dimensions'][1:],
-                  'feature_maps': ssd_settings['feature_maps'],
-                  'steps': ssd_settings['steps'],
-                  'size': ssd_settings['object_size']}
 
         if self.inference:
+            self.priors = Variable(PriorBox().apply(
+                {'min_dim': ssd_settings['input_dimensions'][1:],
+                 'feature_maps': ssd_settings['feature_maps'],
+                 'steps': ssd_settings['steps'],
+                 'size': ssd_settings['object_size']}, rank))
             config['feature_maps'] = [config['feature_maps'][0]]
             config['steps'] = [config['steps'][0]]
             self.softmax = nn.Softmax(dim=-1)
             self.detect = Detect()
         else:
             self.l2norm_2 = L2Norm(1024, 20)
-
-        self.priors = Variable(self.priorbox.apply(config, rank))
 
     @autocast()
     def forward(self, x):
@@ -86,8 +84,7 @@ class SSD(nn.Module):
             output = (
                 loc.view(loc.size(0), -1, 2),
                 cnf.view(cnf.size(0), -1, self.n_classes),
-                reg.view(reg.size(0), -1, 1),
-                self.priors)
+                reg.view(reg.size(0), -1, 1))
         return output
 
     def load_weights(self, file_path):

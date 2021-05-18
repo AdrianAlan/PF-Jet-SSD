@@ -10,12 +10,14 @@ import tqdm
 import yaml
 import torch.distributed as dist
 import torch.multiprocessing as mp
-from tqdm import trange
 
+from torch.autograd import Variable
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed.optim import DistributedOptimizer
 from torch.cuda.amp import GradScaler, autocast
+from tqdm import trange
 from ssd.checkpoints import EarlyStopping
+from ssd.layers.functions import PriorBox
 from ssd.layers.modules import MultiBoxLoss
 from ssd.generator import CalorimeterJetDataset
 from ssd.net import build_ssd
@@ -92,7 +94,14 @@ def execute(rank,
     if rank == 0:
         cp_es = EarlyStopping(patience=training_pref['patience'],
                               save_path='%s/%s.pth' % (output['model'], name))
-    criterion = MultiBoxLoss(rank, ssd_settings['n_classes'],
+    priors = Variable(PriorBox().apply(
+        {'min_dim': ssd_settings['input_dimensions'][1:],
+         'feature_maps': ssd_settings['feature_maps'],
+         'steps': ssd_settings['steps'],
+         'size': ssd_settings['object_size']}, rank))
+    criterion = MultiBoxLoss(rank,
+                             priors,
+                             ssd_settings['n_classes'],
                              min_overlap=ssd_settings['overlap_threshold'])
     scaler = GradScaler()
     verobse = verbose and rank == 0

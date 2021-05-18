@@ -16,10 +16,16 @@ class MultiBoxLoss(nn.Module):
     a large number of default bounding boxes. https://arxiv.org/pdf/1512.02325
     """
 
-    def __init__(self, rank, n_classes, min_overlap=0.5, neg_pos=3):
+    def __init__(self,
+                 rank,
+                 priors,
+                 n_classes,
+                 min_overlap=0.5,
+                 neg_pos=3):
         super(MultiBoxLoss, self).__init__()
 
         self.rank = rank
+        self.priors = priors
         self.n_classes = n_classes
         self.threshold = min_overlap
         self.negpos_ratio = neg_pos
@@ -41,13 +47,11 @@ class MultiBoxLoss(nn.Module):
             loss_c: classification loss
             loss_r: regression loss
         """
-
-        loc_data, conf_data, regr_data, priors = predictions
-        priors = priors[:loc_data.size(1), :]
-        defaults = priors.data
+        loc_data, conf_data, regr_data = predictions
+        defaults = self.priors[:loc_data.size(1), :].data
 
         bs = loc_data.size(0)  # batch size
-        n_priors = priors.size(0)  # number of priors
+        n_priors = self.priors.size(0)  # number of priors
 
         # Match priors with ground truth boxes
         loc_t = torch.Tensor(bs, n_priors, 2)
@@ -59,9 +63,14 @@ class MultiBoxLoss(nn.Module):
             regres = targets[idx][:, -1:].data  # truth auxiliary regression
             match(self.threshold, coords, defaults, self.variance, labels,
                   regres, loc_t, conf_t, regr_t, idx)
-        loc_t = loc_t.cuda(self.rank)
-        conf_t = conf_t.cuda(self.rank)
-        regr_t = regr_t.cuda(self.rank)
+        if self.rank != 'cpu':
+            loc_t = loc_t.cuda(self.rank)
+            conf_t = conf_t.cuda(self.rank)
+            regr_t = regr_t.cuda(self.rank)
+        else:
+            loc_t = loc_t.cpu()
+            conf_t = conf_t.cpu()
+            regr_t = regr_t.cpu()
         loc_t = Variable(loc_t, requires_grad=False)
         conf_t = Variable(conf_t, requires_grad=False)
         regr_t = Variable(regr_t, requires_grad=False)
