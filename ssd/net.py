@@ -10,7 +10,13 @@ from torch.autograd import Variable
 
 class SSD(nn.Module):
 
-    def __init__(self, base, head, ssd_settings, inference, rank, onnx):
+    def __init__(self,
+                 rank,
+                 base,
+                 head,
+                 ssd_settings,
+                 inference=False,
+                 onnx=False):
         super(SSD, self).__init__()
 
         self.inference = inference
@@ -65,12 +71,7 @@ class SSD(nn.Module):
         reg = torch.cat([o.view(o.size(0), -1) for o in reg], 1)
 
         # Apply correct output layer
-        if self.onnx:
-            output = (
-                loc.view(loc.size(0), -1, 2),
-                cnf.view(cnf.size(0), -1, self.n_classes),
-                reg.view(reg.size(0), -1, 1))
-        elif self.inference:
+        if self.inference and not self.onnx:
             output = self.detect.apply(
                 loc.view(loc.size(0), -1, 2),
                 self.softmax(cnf.view(cnf.size(0), -1, self.n_classes)),
@@ -161,4 +162,4 @@ def build_ssd(rank, ssd_settings, inference=False, onnx=False):
     base = mobile_net_v1(input_dimensions[0], inference)
     head = multibox(ssd_settings['n_classes'], inference)
 
-    return SSD(base, head, ssd_settings, inference, rank, onnx)
+    return SSD(rank, base, head, ssd_settings, inference, onnx)
