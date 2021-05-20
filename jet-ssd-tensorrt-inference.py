@@ -50,15 +50,17 @@ if __name__ == '__main__':
     net = build_ssd('cpu', ssd_settings, inference=True, onnx=True)
     net.load_weights(source_path_torch)
     net.eval()
-    loader = get_data_loader(config['dataset']['validation'][0],
-                             args.batchsize,
-                             workers,
-                             in_dim,
-                             jet_size,
-                             shuffle=False)
-    batch_iterator = iter(loader)
-    batch, _ = next(batch_iterator)
-    batch = batch.cpu()
+    data_loader = get_data_loader(config['dataset']['validation'][0],
+                                  args.batchsize,
+                                  workers,
+                                  in_dim,
+                                  jet_size,
+                                  0,
+                                  cpu=True,
+                                  shuffle=False)
+    images = []
+    for image, _ in data_loader:
+        images.append(image)
 
     lgr = trt.Logger(trt.Logger.INFO)
     net_flag = 1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH)
@@ -106,18 +108,24 @@ if __name__ == '__main__':
                 cuda_out.append(cuda_mem)
                 context = engine.create_execution_context()
 
-        np.copyto(host_in[0], batch.numpy().ravel())
-
-        logger.info('GPU warm-up')
-        for _ in range(10):
-            cuda.memcpy_htod_async(cuda_in[0], host_in[0], stream)
-            context.execute_async(batch_size=args.batchsize,
-                                  bindings=bindings,
-                                  stream_handle=stream.handle)
-
-        logger.info('Measuring latency')
         measurements = 0
-        for i in range(samples):
+        logger.info('Measuring latency')
+
+        for batch_index in range(samples):
+
+            if batch_index == samples:
+                break
+
+            np.copyto(host_in[0], images[batch_index].numpy().ravel())
+
+            if batch_index == 0:
+                logger.info('GPU warm-up')
+                for _ in range(10):
+                    cuda.memcpy_htod_async(cuda_in[0], host_in[0], stream)
+                    context.execute_async(batch_size=args.batchsize,
+                                          bindings=bindings,
+                                          stream_handle=stream.handle)
+
             t_start = time.time()
             cuda.memcpy_htod_async(cuda_in[0], host_in[0], stream)
             context.execute_async(batch_size=args.batchsize,
@@ -130,19 +138,17 @@ if __name__ == '__main__':
             elapsed_time = time.time() - t_start
             measurements += elapsed_time * 1e6
 
+            if not args.suppress:
+                logger.info('Performing checks')
+                desired = list(map(to_numpy, list(net(images[batch_index]))))
+                for i, task in enumerate(['loc', 'cls', 'reg']):
+                    is_equal(host_out[i].reshape(desired[i].shape),
+                             desired[i],
+                             decimal=3)
+
         latency = measurements / samples
         throughput = 1e6 * args.batchsize / latency
 
         logger.info('Batch size {0}'.format(args.batchsize))
         logger.info('Latency: {0:.2f} us'.format(latency))
         logger.info('Throughput: {0:.2f} eps'.format(throughput))
-
-        if not args.suppress:
-            desired = list(map(to_numpy, list(net(batch))))
-            for i, task in enumerate(['Localization',
-                                      'Classification',
-                                      'Regression']):
-                is_equal(host_out[i].reshape(desired[i].shape),
-                         desired[i],
-                         decimal=4)
-                logger.info('{} task: OK'.format(task))
