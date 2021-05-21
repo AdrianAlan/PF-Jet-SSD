@@ -7,12 +7,12 @@ from torch.autograd import Variable
 
 
 class L2Norm(nn.Module):
-    def __init__(self, n_channels, scale):
+    def __init__(self, n_channels, scale, device):
         super(L2Norm, self).__init__()
         self.n_channels = n_channels
         self.gamma = scale or None
         self.eps = 1e-10
-        self.weight = nn.Parameter(torch.Tensor(self.n_channels))
+        self.weight = nn.Parameter(torch.Tensor(self.n_channels)).to(device)
         self.reset_parameters()
 
     def reset_parameters(self):

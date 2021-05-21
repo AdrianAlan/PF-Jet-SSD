@@ -26,7 +26,7 @@ class SSD(nn.Module):
         self.loc = nn.ModuleList(head[0])
         self.cnf = nn.ModuleList(head[1])
         self.reg = nn.ModuleList(head[2])
-        self.l2norm_1 = L2Norm(512, 20)
+        self.l2norm_1 = L2Norm(512, 20, torch.device(rank))
         self.n_classes = ssd_settings['n_classes']
         self.top_k = ssd_settings['top_k']
         self.min_confidence = ssd_settings['confidence_threshold']
@@ -43,7 +43,7 @@ class SSD(nn.Module):
             self.softmax = nn.Softmax(dim=-1)
             self.detect = Detect()
         else:
-            self.l2norm_2 = L2Norm(1024, 20)
+            self.l2norm_2 = L2Norm(1024, 20, torch.device(rank))
 
     @autocast()
     def forward(self, x):
