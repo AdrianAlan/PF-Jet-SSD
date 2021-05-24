@@ -35,11 +35,9 @@ class SSD(nn.Module):
         if self.inference:
             self.priors = Variable(PriorBox().apply(
                 {'min_dim': ssd_settings['input_dimensions'][1:],
-                 'feature_maps': ssd_settings['feature_maps'],
-                 'steps': ssd_settings['steps'],
+                 'feature_maps': [ssd_settings['feature_maps'][0]],
+                 'steps': [ssd_settings['steps'][0]],
                  'size': ssd_settings['object_size']}, rank))
-            config['feature_maps'] = [config['feature_maps'][0]]
-            config['steps'] = [config['steps'][0]]
             self.softmax = nn.Softmax(dim=-1)
             self.detect = Detect()
         else:
