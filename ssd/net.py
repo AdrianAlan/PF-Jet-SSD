@@ -2,6 +2,7 @@ import os
 import torch
 import torch.nn as nn
 
+from torch.quantization import QuantStub, DeQuantStub
 from dropblock import DropBlock2D
 from torch.cuda.amp import autocast
 from ssd.layers import *
@@ -16,10 +17,12 @@ class SSD(nn.Module):
                  head,
                  ssd_settings,
                  inference=False,
+                 int8=False,
                  onnx=False):
         super(SSD, self).__init__()
 
         self.inference = inference
+        self.int8 = int8
         self.onnx = onnx
         self.rank = rank
         self.mobilenet = nn.ModuleList(base)
@@ -32,6 +35,10 @@ class SSD(nn.Module):
         self.min_confidence = ssd_settings['confidence_threshold']
         self.nms = ssd_settings['nms']
 
+        if self.int8:
+            self.quant = QuantStub()
+            self.dequant = DeQuantStub()
+
         if self.inference:
             self.priors = Variable(PriorBox().apply(
                 {'min_dim': ssd_settings['input_dimensions'][1:],
@@ -43,20 +50,29 @@ class SSD(nn.Module):
         else:
             self.l2norm_2 = L2Norm(1024, 20, torch.device(rank))
 
-    @autocast()
     def forward(self, x):
-        """Applies network layers and ops on input images x"""
+        if self.int8:
+            return self.forward_pass(x)
+        else:
+            with autocast():
+                return self.forward_pass(x)
 
+    def forward_pass(self, x):
+        """Applies network layers and ops on input images x"""
         sources, loc, cnf, reg = list(), list(), list(), list()
+        if self.int8:
+            x = self.quant(x)
 
         # Add base network
         for i, layer in enumerate(self.mobilenet):
-            if self.rank != 'cpu':
-                layer = layer.cuda(self.rank)
             x = layer(x)
             if i == 11:
+                if self.int8:
+                    x = self.dequant(x)
                 sources.append(self.l2norm_1(x))
             if i == 14:
+                if self.int8:
+                    x = self.dequant(x)
                 sources.append(self.l2norm_2(x))
 
         # Apply multibox head to source layers
@@ -153,11 +169,11 @@ def multibox(n_classes, inference):
     return (loc, cnf, reg)
 
 
-def build_ssd(rank, ssd_settings, inference=False, onnx=False):
+def build_ssd(rank, ssd_settings, inference=False, int8=False, onnx=False):
 
     input_dimensions = ssd_settings['input_dimensions']
 
     base = mobile_net_v1(input_dimensions[0], inference)
     head = multibox(ssd_settings['n_classes'], inference)
 
-    return SSD(rank, base, head, ssd_settings, inference, onnx)
+    return SSD(rank, base, head, ssd_settings, inference, int8, onnx)

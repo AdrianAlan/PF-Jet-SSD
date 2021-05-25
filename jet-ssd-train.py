@@ -30,6 +30,7 @@ def execute(rank,
             world_size,
             name,
             ternary,
+            int8,
             dataset,
             output,
             training_pref,
@@ -66,7 +67,10 @@ def execute(rank,
                                  return_pt=True)
 
     # Build SSD network
-    ssd_net = build_ssd(rank, ssd_settings).to(rank)
+    ssd_net = build_ssd(rank, ssd_settings, int8=int8).to(rank)
+    if int8:
+        ssd_net.qconfig = torch.quantization.get_default_qat_qconfig('fbgemm')
+        torch.quantization.prepare_qat(ssd_net, inplace=True)
     if rank == 0:
         logger.debug('SSD architecture:\n{}'.format(str(ssd_net)))
 
@@ -116,6 +120,12 @@ def execute(rank,
         # Start model training
         if verbose:
             tr = trange(len(train_loader), file=sys.stdout)
+        if int8 and epoch > 3:
+            # Freeze quantizer parameters
+            net.apply(torch.quantization.disable_observer)
+        if int8 and epoch > 2:
+            # Freeze batch norm mean and variance estimates
+            net.apply(torch.nn.intrinsic.qat.freeze_bn_stats)
 
         loc.reset()
         cls.reset()
@@ -141,10 +151,15 @@ def execute(rank,
                                                    m.weight.delta,
                                                    m.weight.alpha)
 
-            with autocast():
+            if int8:
                 outputs = net(images)
                 l, c, r = criterion(outputs, targets)
                 loss = l + c + r
+            else:
+                with autocast():
+                    outputs = net(images)
+                    l, c, r = criterion(outputs, targets)
+                    loss = l + c + r
 
             loc.update(l)
             cls.update(c)
@@ -278,6 +293,8 @@ if __name__ == '__main__':
     parser.add_argument('-m', '--pre-trained-model', action=IsValidFile,
                         default=None, dest='pre_trained_model_path', type=str,
                         help='Path to pre-trained model')
+    parser.add_argument('-8', '--int8', action='store_true',
+                        help='Train int8 network')
     parser.add_argument('-t', '--ternary', action='store_true',
                         help='Ternarize weights')
     parser.add_argument('-v', '--verbose', action='store_true',
@@ -293,6 +310,7 @@ if __name__ == '__main__':
              args=(world_size,
                    args.name,
                    args.ternary,
+                   args.int8,
                    config['dataset'],
                    config['output'],
                    config['training_pref'],
