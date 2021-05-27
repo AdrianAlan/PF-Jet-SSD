@@ -12,12 +12,12 @@ dependencies:
   - onnxruntime=1.7.2=py36h3acbe98_2
   - pip
   - pycuda=2021.1=py36he9f09bb_0
-  - pytorch=1.8.1=py3.6_cuda11.1_cudnn8.0.5_0
+  - pytorch=1.9.0=py3.6_cuda11.1_cudnn8.0.5_0
   - pyyaml=5.3.1=py36he6145b8_1
   - scikit-learn=0.23.2=py36hb6e6923_3
   - simplejson=3.17.2=py36h8c4c3a4_1
-  - torchaudio=0.8.1=py36
-  - torchvision=0.9.1=py36_cu111
+  - torchaudio=0.9.0=py36
+  - torchvision=0.10.0=py36_cu111
   - tqdm=4.61.0=pyhd8ed1ab_0
   - uproot3=3.14.4=pyhd8ed1ab_0
   - uproot3-methods=0.10.1=pyhd8ed1ab_0
