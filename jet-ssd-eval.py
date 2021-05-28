@@ -3,10 +3,17 @@ import torch
 import torch.nn as nn
 import torch.backends.cudnn as cudnn
 import yaml
+import warnings
 
 from ssd.net import build_ssd
 from tqdm import tqdm
 from utils import *
+
+warnings.filterwarnings(
+    action='ignore',
+    category=UserWarning,
+    module=r'.*'
+)
 
 
 def execute(model, dataset, im_size, obj_size, conf_threshold=10**-6,

@@ -6,10 +6,11 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.backends.cudnn as cudnn
 import torch.nn.init as init
-import tqdm
-import yaml
 import torch.distributed as dist
 import torch.multiprocessing as mp
+import tqdm
+import warnings
+import yaml
 
 from torch.autograd import Variable
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -24,6 +25,13 @@ from ssd.net import build_ssd
 from ssd.qutils import get_delta, get_alpha, to_ternary
 from utils import AverageMeter, IsValidFile, Plotting, get_data_loader, \
     set_logging
+
+
+warnings.filterwarnings(
+    action='ignore',
+    category=UserWarning,
+    module=r'.*'
+)
 
 
 def execute(rank,
