@@ -111,43 +111,55 @@ class SSD(nn.Module):
         return False
 
 
-def conv_bn(inp, out):
+def conv_bn(inp, out, int8):
+    if int8:
+        act = nn.ReLU()
+    else:
+        act = nn.PReLU(out)
+
     return nn.Sequential(
         nn.Conv2d(inp, out, kernel_size=3, stride=1, padding=1, bias=False),
         nn.BatchNorm2d(out),
         DropBlock2D(block_size=3, drop_prob=0.1),
-        nn.PReLU(out)
+        act
     )
 
 
-def conv_dw(inp, out):
+def conv_dw(inp, out, int8):
+    if int8:
+        act_1 = nn.ReLU()
+        act_2 = nn.ReLU()
+    else:
+        act_1 = nn.PReLU(inp)
+        act_2 = nn.PReLU(out)
+
     return nn.Sequential(
         nn.Conv2d(inp, inp, kernel_size=3, stride=1, padding=1, bias=False,
                   groups=inp),
         nn.BatchNorm2d(inp),
-        nn.PReLU(inp),
+        act_1,
         nn.Conv2d(inp, out, kernel_size=1, stride=1, padding=0, bias=False),
         nn.BatchNorm2d(out),
-        nn.PReLU(out)
+        act_2
     )
 
 
-def mobile_net_v1(c, inference):
-    layers = [conv_bn(c, 32),
+def mobile_net_v1(c, int8, inference):
+    layers = [conv_bn(c, 32, int8),
               nn.AvgPool2d(kernel_size=2, stride=2, padding=1),
-              conv_dw(32, 64),
-              conv_dw(64, 128),
-              conv_dw(128, 128),
+              conv_dw(32, 64, int8),
+              conv_dw(64, 128, int8),
+              conv_dw(128, 128, int8),
               nn.AvgPool2d(kernel_size=2, stride=2, padding=1),
-              conv_dw(128, 256),
-              conv_dw(256, 512),
-              conv_dw(512, 512),
+              conv_dw(128, 256, int8),
+              conv_dw(256, 512, int8),
+              conv_dw(512, 512, int8),
               nn.AvgPool2d(kernel_size=2, stride=2, padding=1),
-              conv_dw(512, 512),
-              conv_dw(512, 512),
+              conv_dw(512, 512, int8),
+              conv_dw(512, 512, int8),
               nn.AvgPool2d(kernel_size=2, stride=2, padding=1),
-              conv_dw(512, 1024),
-              conv_dw(1024, 1024)]
+              conv_dw(512, 1024, int8),
+              conv_dw(1024, 1024, int8)]
     if inference:
         return layers[:-3]
     return layers
@@ -173,7 +185,7 @@ def build_ssd(rank, ssd_settings, inference=False, int8=False, onnx=False):
 
     input_dimensions = ssd_settings['input_dimensions']
 
-    base = mobile_net_v1(input_dimensions[0], inference)
+    base = mobile_net_v1(input_dimensions[0], int8, inference)
     head = multibox(ssd_settings['n_classes'], inference)
 
     return SSD(rank, base, head, ssd_settings, inference, int8, onnx)
