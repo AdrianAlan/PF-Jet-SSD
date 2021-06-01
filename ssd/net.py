@@ -68,18 +68,23 @@ class SSD(nn.Module):
             x = layer(x)
             if i == 11:
                 if self.int8:
-                    x = self.dequant(x)
-                sources.append(self.l2norm_1(x))
+                    sources.append(x)
+                else:
+                    sources.append(self.l2norm_1(x))
             if i == 14:
                 if self.int8:
-                    x = self.dequant(x)
-                sources.append(self.l2norm_2(x))
+                    sources.append(x)
+                else:
+                    sources.append(self.l2norm_2(x))
 
         # Apply multibox head to source layers
         for (x, l, c, r) in zip(sources, self.loc, self.cnf, self.reg):
-            loc.append(l(x).permute(0, 2, 3, 1).contiguous())
-            cnf.append(c(x).permute(0, 2, 3, 1).contiguous())
-            reg.append(r(x).permute(0, 2, 3, 1).contiguous())
+            l, c, r = l(x), c(x), r(x)
+            if self.int8:
+                l, c, r = self.dequant(l), self.dequant(c), self.dequant(r)
+            loc.append(l.permute(0, 2, 3, 1).contiguous())
+            cnf.append(c.permute(0, 2, 3, 1).contiguous())
+            reg.append(r.permute(0, 2, 3, 1).contiguous())
         loc = torch.cat([o.view(o.size(0), -1) for o in loc], 1)
         cnf = torch.cat([o.view(o.size(0), -1) for o in cnf], 1)
         reg = torch.cat([o.view(o.size(0), -1) for o in reg], 1)
