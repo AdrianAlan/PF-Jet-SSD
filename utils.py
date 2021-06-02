@@ -427,7 +427,7 @@ def get_data_loader(hdf5_source_path,
                     return_baseline=False,
                     return_pt=False,
                     shuffle=True):
-    dataset = CalorimeterJetDataset(rank,
+    dataset = CalorimeterJetDataset(torch.device(rank),
                                     hdf5_source_path,
                                     input_dimensions,
                                     jet_size,

@@ -69,13 +69,16 @@ class CalorimeterJetDataset(torch.utils.data.Dataset):
         labels_raw = tcuda.FloatTensor(self.labels[index], device=self.rank)
         labels_processed = self.process_labels(labels_raw, scaler)
 
+        if self.cpu:
+            calorimeter = calorimeter.cpu()
+            labels_processed = labels_processed.cpu()
+            scaler = scaler.cpu()
+
         if self.return_baseline:
             base_raw = tcuda.FloatTensor(self.base[index], device=self.rank)
             base_processed = self.process_baseline(base_raw)
             return calorimeter, labels_processed, base_processed, scaler
 
-        if self.cpu:
-            return calorimeter.cpu(), labels_processed.cpu()
         return calorimeter, labels_processed
 
     def __len__(self):

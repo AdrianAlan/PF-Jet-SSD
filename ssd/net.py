@@ -91,11 +91,13 @@ class SSD(nn.Module):
 
         # Apply correct output layer
         if self.inference and not self.onnx:
+            priors = self.priors.type(type(x.data))
+            priors = priors.to(torch.device(self.rank))
             output = self.detect.apply(
                 loc.view(loc.size(0), -1, 2),
                 self.softmax(cnf.view(cnf.size(0), -1, self.n_classes)),
                 reg.view(reg.size(0), -1, 1),
-                self.priors.type(type(x.data)),
+                priors,
                 self.n_classes,
                 self.top_k,
                 self.min_confidence,

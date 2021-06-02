@@ -11,7 +11,7 @@ class PriorBox(Function):
     """
 
     @staticmethod
-    def forward(ctx, config, rank):
+    def forward(ctx, config, device):
 
         mean = []
         image_size = config['min_dim']
@@ -34,9 +34,5 @@ class PriorBox(Function):
 
                 mean += [cx, cy, s_k_max_x, s_k_max_y]
 
-        if rank == 'cpu':
-            output = torch.FloatTensor(mean).view(-1, 4)
-        else:
-            output = torch.cuda.FloatTensor(mean, device=rank).view(-1, 4)
-
+        output = torch.FloatTensor(mean).view(-1, 4).to(device)
         return output
