@@ -375,7 +375,7 @@ class GetResources():
         }
 
         def add_hooks(m: nn.Module):
-            m.register_buffer('total_ops', torch.zeros(1, dtype=torch.float64))
+            m.register_buffer('total_ops', torch.zeros(1))
             m_type = type(m)
 
             fn = None
