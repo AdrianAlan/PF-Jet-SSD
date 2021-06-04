@@ -1,5 +1,5 @@
 figure.dpi: 150
-figure.figsize: 5.6, 4.2
+figure.figsize: 8.0, 6.0
 
 savefig.dpi: 200
 savefig.format: png
@@ -30,7 +30,7 @@ legend.fontsize: 14
 legend.frameon: False
 legend.handlelength: 0.7
 
-lines.linewidth: 1.2
+lines.linewidth: 1.0
 
 xtick.color: (0.2,0.25,0.29)
 xtick.direction: in
