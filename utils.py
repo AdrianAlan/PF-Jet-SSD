@@ -69,27 +69,19 @@ class Plotting():
     def __init__(self, save_dir='./plots', ref_recall=0.3):
 
         self.save_dir = save_dir
-        self.line_styles = [(0, (2, 2)), (0, ()), (0, (2, 2))]
-        self.legend = ['Full Precision',
-                       'Ternary Weight',
-                       r'Baseline AK8+$m_{SOFTDROP}$+$\tau_{21}/\tau_{32}$']
-        self.shades = ['shade_400', 'shade_900', 'shade_200']
+        self.legend = ['Baseline', 'FPN', 'TWN', 'INT8']
         self.ref_recall = ref_recall
 
         plt.style.use('./plots/ssdjet.mplstyle')
-        matplotlib.rcParams["figure.figsize"] = (8.0, 6.0)
-
         with open('./plots/palette.json') as json_file:
             self.color_palette = json.load(json_file)
-        self.colors = [self.color_palette['indigo'],
-                       self.color_palette['red'],
-                       self.color_palette['green'],
-                       self.color_palette['yellow']]
+        shade = 'shade_700'
+        self.colors = [self.color_palette['red'][shade],
+                       self.color_palette['blue'][shade],
+                       self.color_palette['yellow'][shade],
+                       self.color_palette['green'][shade]]
+        self.line_styles = ['solid', (0, (1, 3)), (0, (5, 5))]
         self.markers = ["o", "v", "s"]
-
-    def get_logo(self):
-        return OffsetImage(plt.imread('./plots/hls4mllogo.jpg', format='jpg'),
-                           zoom=0.08)
 
     def draw_loss(self,
                   data_train,
@@ -107,66 +99,75 @@ class Plotting():
             color = self.colors[x]
             plt.plot(train,
                      linestyle=self.line_styles[0],
-                     color=color['shade_800'],
+                     color=color,
                      label=key)
             plt.plot(val,
                      linestyle=self.line_styles[1],
-                     color=color['shade_400'])
+                     color=color)
 
         ax.legend()
-        fig.savefig('{}/loss-{}'.format(self.save_dir, name))
+        plt.savefig('{}/loss-{}'.format(self.save_dir, name))
         plt.close(fig)
 
-    def draw_precision_recall(self, results_fp, results_tp, results_base,
+    def draw_precision_recall(self,
+                              results_base,
+                              results_fpn,
+                              results_twn,
+                              results_int8,
                               jet_names):
         """Plots the precision recall curve"""
 
         fig, ax = plt.subplots()
-        for i, results in enumerate([results_fp, results_tp, results_base]):
-            model_name = self.legend[i]
-            for x, jet_name in enumerate(jet_names):
-                score = results[x][:, 3].cpu().numpy()
-                truth = results[x][:, 4].cpu().numpy()
+        for i, results in enumerate([results_base,
+                                     results_fpn,
+                                     results_twn,
+                                     results_int8]):
+            name = self.legend[i]
+            for j, jet in enumerate(jet_names):
+                score = results[j][:, 3].numpy()
+                truth = results[j][:, 4].numpy()
                 precision, recall, _ = precision_recall_curve(truth, score)
                 ap = average_precision_score(truth, score)
-                label = '{0}: {1} jets, AP: {2:.3f}'.format(model_name,
-                                                            jet_name, ap)
+                label = '{0}: {1} jets, AP: {2:.3f}'.format(name, jet, ap)
                 plt.plot(recall[1:],
                          precision[1:],
-                         linestyle=self.line_styles[i],
-                         color=self.colors[x][self.shades[i]],
+                         linestyle=self.line_styles[j],
+                         color=self.colors[i],
                          label=label)
 
         plt.xlabel('Recall (TPR)', horizontalalignment='right', x=1.0)
         plt.ylabel('Precision (PPV)', horizontalalignment='right', y=1.0)
         plt.xticks([0.2, 0.4, 0.6, 0.8, 1])
         plt.yticks([0.2, 0.4, 0.6, 0.8, 1])
-        ax.legend(loc='upper center', bbox_to_anchor=(0.25, -0.1))
+        ax.legend(loc='upper left', bbox_to_anchor=(1, 1))
         fig.savefig('{}/precision-recall-curve'.format(self.save_dir))
         plt.close(fig)
 
     def draw_precision_details(self,
-                               results_fp,
-                               results_tp,
-                               deltas,
+                               results_base,
+                               results_fpn,
+                               results_twn,
+                               results_int8,
                                jet_names,
                                nbins=11):
         """Plots the precision histogram at fixed recall"""
 
         legend_helper_network, legend_helper_type = [], []
-        for i in range(2):
+        for i, jet in enumerate(jet_names):
             legend_helper_network.append(Line2D([], [],
                                                 linewidth=0,
-                                                markersize=5,
+                                                markersize=4,
                                                 marker=self.markers[i],
                                                 color='black',
-                                                label=self.legend[i]))
+                                                label='{} jets'.format(jet)))
 
-        for i, jet_name in enumerate(jet_names):
+        for i in range(3):
             legend_helper_type.append(Line2D([], [],
                                              linewidth=2,
-                                             color=self.colors[i]['shade_800'],
-                                             label='{} jets'.format(jet_name)))
+                                             color=self.colors[i+1],
+                                             label=self.legend[i+1]))
+
+
 
         for i, l, name, mul, sub in [(0, r'$\eta$', 'eta', 6, 3),
                                      (1, r'$\phi$ [$\degree$]', 'phi', 360, 0),
@@ -174,11 +175,13 @@ class Plotting():
 
             fig, ax = plt.subplots()
             plt.xlabel(l, horizontalalignment='right', x=1.0)
-            plt.ylabel("Precision (PPV)", horizontalalignment='right', y=1.0)
+            plt.ylabel('Precision (PPV) @ TPR={}'.format(self.ref_recall),
+                       horizontalalignment='right',
+                       y=1.0)
 
             # Fix binning across classes
             if i == 5:
-                d = deltas.cpu().numpy()
+                d = results_base.numpy()
                 min_pt, max_pt = np.min(d[:, 1]), np.max(d[:, 1])
                 binning = np.logspace(np.log10(min_pt),
                                       np.log10(max_pt),
@@ -188,12 +191,14 @@ class Plotting():
                 binning = np.linspace(0, 1, nbins)[1:]
                 ax.set_xlim([0, 1])
 
-            for x, jet_name in enumerate(jet_names):
-                for index, result in enumerate([results_fp, results_tp]):
-                    color = self.colors[x][self.shades[index]]
-                    score = result[x][:, 3].cpu().numpy()
-                    truth = result[x][:, 4].cpu().numpy()
-                    values = result[x][:, i].cpu().numpy()
+            for x, _ in enumerate(jet_names):
+                for index, result in enumerate([results_fpn,
+                                                results_twn,
+                                                results_int8]):
+                    color = self.colors[index+1]
+                    score = result[x][:, 3].numpy()
+                    truth = result[x][:, 4].numpy()
+                    values = result[x][:, i].numpy()
 
                     bmin, v = -np.inf, []
                     for bmax in binning:
@@ -217,9 +222,9 @@ class Plotting():
 
                     ax.plot(xvalues, v,
                             color=color,
-                            marker=self.markers[index],
+                            marker=self.markers[x],
                             linewidth=0,
-                            markersize=5)
+                            markersize=4)
             if i == 0:
                 ticks = (ax.get_xticks()*mul-sub)
                 ticks = np.round_(ticks, decimals=2)
@@ -237,38 +242,40 @@ class Plotting():
                                             loc='upper left',
                                             bbox_to_anchor=(0.2, -0.1)))
 
-            fig.savefig('{}/precision-{}'.format(self.save_dir, name))
+            plt.savefig('{}/precision-{}'.format(self.save_dir, name))
             plt.close(fig)
 
-    def draw_loc_delta(self, results_fp, results_tp, results_base,
-                       jet_names, nbins=12):
+    def draw_loc_delta(self,
+                       results_base,
+                       results_fpn,
+                       results_twn,
+                       results_int8,
+                       jet_names,
+                       nbins=11):
         """Plots the localization and regression error"""
-        results_fp = results_fp.cpu().numpy()
-        results_tp = results_tp.cpu().numpy()
-        results_base = results_base.cpu().numpy()
 
         # Fix binning across classes
-        min_pt, max_pt = np.min(results_fp[:, 1]), np.max(results_fp[:, 1])
+        pt = results_base[:, 1].numpy()
+        min_pt, max_pt = np.min(pt), np.max(pt)
         binning = np.logspace(np.log10(min_pt), np.log10(max_pt), nbins)[1:]
 
         # Fix legend helpers
-        legend_helper_network = []
-        for i, name in enumerate(self.legend):
+        legend_helper_network, legend_helper_type = [], []
+        for i, jet in enumerate(jet_names):
             legend_helper_network.append(Line2D([], [],
                                                 linewidth=0,
-                                                markersize=5,
+                                                markersize=4,
                                                 marker=self.markers[i],
                                                 color='black',
-                                                label=name))
+                                                label='{} jets'.format(jet)))
 
-        legend_helper_type = []
-        for i, jet in enumerate(jet_names):
+        for i in range(4):
             legend_helper_type.append(Line2D([], [],
                                              linewidth=2,
-                                             color=self.colors[i]['shade_800'],
-                                             label='%s jets' % jet))
+                                             color=self.colors[i],
+                                             label=self.legend[i]))
 
-        for i, l, n in [(2, r'$\mu|\eta-\eta^{GEN}|$ [rad]', 'eta'),
+        for i, l, n in [(2, r'$\mu|\eta-\eta^{GEN}|$', 'eta'),
                         (3, r'$\mu|\phi-\phi^{GEN}|$ [rad]', 'phi'),
                         (4, r'$\mu\frac{|p_T-p_T^{GEN}|}{p_T^{GEN}}$', 'pt')]:
 
@@ -279,9 +286,12 @@ class Plotting():
             plt.ylabel(l, horizontalalignment='right', y=1.0)
             for x, _ in enumerate(jet_names):
 
-                for q, d in enumerate([results_fp, results_tp, results_base]):
-                    color = self.colors[x][self.shades[q]]
-                    cls = d[d[:, 0] == x+1]
+                for index, results in enumerate([results_base,
+                                                 results_fpn,
+                                                 results_twn,
+                                                 results_int8]):
+                    color = self.colors[index]
+                    cls = results[results[:, 0] == x+1].numpy()
                     bmin, v = 0, []
                     for bmax in binning:
                         b = cls[(cls[:, 1] > bmin) & (cls[:, 1] <= bmax)]
@@ -294,7 +304,7 @@ class Plotting():
 
                     ax.plot(binning, v,
                             color=color,
-                            marker=self.markers[q],
+                            marker=self.markers[x],
                             linewidth=0,
                             markersize=5)
             ax.set_xlim([min_pt, max_pt*1.2])
@@ -311,7 +321,7 @@ class Plotting():
                                             loc='upper left',
                                             bbox_to_anchor=(0.2, -0.1)))
 
-            fig.savefig('%s/delta-%s' % (self.save_dir, n))
+            plt.savefig('%s/delta-%s' % (self.save_dir, n))
             plt.close(fig)
 
     def draw_barchart(self, x, y, label, ylabel,
@@ -326,9 +336,9 @@ class Plotting():
         ax.set_xlabel(xlabel, horizontalalignment='right', x=1.0)
         ax.set_ylabel(ylabel, horizontalalignment='right', y=1.0)
         ax.bar(groups - width/2, y[0], label=label[0], width=width,
-               color=self.colors[0]['shade_500'])
+               color=self.colors[0])
         ax.bar(groups + width/2, y[1], label=label[1], width=width,
-               color=self.colors[1]['shade_500'])
+               color=self.colors[1])
         ax.set_xticks(groups)
         ax.set_xticklabels(x)
         ax.set_yscale('log')
