@@ -167,8 +167,6 @@ class Plotting():
                                              color=self.colors[i+1],
                                              label=self.legend[i+1]))
 
-
-
         for i, l, name, mul, sub in [(0, r'$\eta$', 'eta', 6, 3),
                                      (1, r'$\phi$ [$\degree$]', 'phi', 360, 0),
                                      (5, r'$p_T^{SSD}$ [GeV/s]', 'pt', 1, 0)]:
@@ -181,8 +179,8 @@ class Plotting():
 
             # Fix binning across classes
             if i == 5:
-                d = results_base.numpy()
-                min_pt, max_pt = np.min(d[:, 1]), np.max(d[:, 1])
+                pt = results_base[:, 1].numpy()
+                min_pt, max_pt = np.min(pt), np.max(pt)
                 binning = np.logspace(np.log10(min_pt),
                                       np.log10(max_pt),
                                       nbins)[1:]
@@ -199,15 +197,14 @@ class Plotting():
                     score = result[x][:, 3].numpy()
                     truth = result[x][:, 4].numpy()
                     values = result[x][:, i].numpy()
-
-                    bmin, v = -np.inf, []
+                    bmin, v = 0, []
                     for bmax in binning:
                         if binning[-1] == bmax:
                             mask = (values > bmin)
                         else:
                             mask = (values > bmin) & (values <= bmax)
                         s, t = score[mask], truth[mask]
-                        if len(s):
+                        if len(s) and np.sum(t):
                             p, r, _ = precision_recall_curve(t, s)
                             tmp = p[(np.abs(r - self.ref_recall)).argmin()]
                             v.append(np.round(tmp, 2))
