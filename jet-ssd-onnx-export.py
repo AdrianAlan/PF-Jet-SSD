@@ -4,8 +4,10 @@ import onnx
 import onnxruntime
 import torch
 import torch.nn as nn
+import torch.quantization
 import yaml
 
+from numpy.testing import assert_almost_equal as is_equal
 from ssd.net import build_ssd
 from utils import *
 
@@ -17,40 +19,65 @@ def to_numpy(t):
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser("Convert PyTorch SSD to ONNX")
-    parser.add_argument('model', type=str, help='Input model name')
-    parser.add_argument('-c', '--config', action=IsValidFile, type=str,
-                        help='Path to config file', default='ssd-config.yml')
-    parser.add_argument('-v', '--verbose', action='store_true',
+    parser.add_argument('model',
+                        type=str,
+                        help='Input model name')
+    parser.add_argument('-c', '--config',
+                        action=IsValidFile,
+                        type=str,
+                        help='Path to config file',
+                        default='ssd-config.yml')
+    parser.add_argument('-s', '--suppress',
+                        action='store_true',
+                        help='Suppress checks')
+    parser.add_argument('-v', '--verbose',
+                        action='store_true',
                         help='Output verbosity')
     args = parser.parse_args()
 
     config = yaml.safe_load(open(args.config))
 
-    base_name = '{}/{}'.format(config['output']['model'], args.model)
-    source_path = '{}.pth'.format(base_name)
-    export_path = '{}.onnx'.format(base_name)
-    log_path = '{}.log'.format(base_name)
+    logger = set_logging('Test_SSD',
+                         '{}/PF-Jet-SSD-Test.log'.format(
+                              config['output']['model']),
+                         args.verbose)
 
-    logger = set_logging('Test_SSD', log_path, args.verbose)
-    logger.info('Converting PyTorch SSD model to ONNX')
+    logger.info('Converting {} model to ONNX'.format(args.model))
+
+    ssd_settings = config['ssd_settings']
+    input_dimensions = ssd_settings['input_dimensions']
+    jet_size = ssd_settings['object_size']
+    num_workers = config['evaluation_pref']['workers']
+    dataset = config['dataset']['validation'][0]
+
+    ssd_settings['n_classes'] += 1
+
+    source_path = '{}/{}.pth'.format(config['output']['model'], args.model)
+    export_path = '{}/{}.onnx'.format(config['output']['model'], args.model)
+
+    torch.set_default_tensor_type('torch.FloatTensor')
 
     logger.info('Prepare PyTorch model')
-    ssd_settings = config['ssd_settings']
-    ssd_settings['n_classes'] += 1
-    net = build_ssd('cpu', ssd_settings, inference=True, onnx=True)
+    net = build_ssd(torch.device('cpu'),
+                    ssd_settings,
+                    inference=True,
+                    onnx=True)
+
     net.load_weights(source_path)
     net.eval()
 
     logger.info('Prepare inputs')
-    in_dim = ssd_settings['input_dimensions']
-    jet_size = ssd_settings['object_size']
-    workers = config['evaluation_pref']['workers']
-    loader = get_data_loader(config['dataset']['validation'][0], int(1),
-                             workers, in_dim, jet_size, shuffle=False)
+    loader = get_data_loader(dataset,
+                             1,
+                             num_workers,
+                             input_dimensions,
+                             jet_size,
+                             cpu=True,
+                             shuffle=False)
+
     batch_iterator = iter(loader)
     dummy_input, _ = next(batch_iterator)
-    dummy_input = dummy_input.cpu()
-
+    print(net)
     logger.info('Export as ONNX model')
     torch.onnx.export(net,
                       dummy_input,
@@ -70,16 +97,17 @@ if __name__ == '__main__':
     logger.info('Matching outputs')
     ort_session = onnxruntime.InferenceSession(export_path)
     # Compute PyTorch output prediction
-    torch_outs = list(map(to_numpy, list(net(dummy_input))))
+    torch_out = list(map(to_numpy, list(net(dummy_input))))
     # Compute ONNX Runtime output prediction
     ort_inputs = {ort_session.get_inputs()[0].name: to_numpy(dummy_input)}
-    ort_outs = ort_session.run(None, ort_inputs)
+    ort_out = ort_session.run(None, ort_inputs)
     # Compare ONNX Runtime and PyTorch results
-    for i, task in enumerate(['Localization', 'Classification', 'Regression']):
-        np.testing.assert_allclose(torch_outs[i],
-                                   ort_outs[i],
-                                   rtol=1e-03,
-                                   atol=1e-05)
-        logger.info('{} task: OK'.format(task))
+    if not args.suppress:
+        logger.info('Performing checks')
+        for i, task in enumerate(['Localization',
+                                  'Classification',
+                                  'Regression']):
+            is_equal(torch_out[i], ort_out[i], decimal=3)
+            logger.info('{} task: OK'.format(task))
 
     logger.info("Exported model has been successfully tested with ONNXRuntime")
