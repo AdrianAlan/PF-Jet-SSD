@@ -1,5 +1,7 @@
 import argparse
 import numpy as np
+import onnx
+import onnxruntime as ort
 import torch
 import time
 import warnings
@@ -8,6 +10,7 @@ import yaml
 from numpy.testing import assert_almost_equal as is_equal
 from ssd.net import build_ssd
 from utils import *
+from onnxruntime import InferenceSession, SessionOptions, get_all_providers
 
 import tensorrt as trt
 import pycuda.driver as cuda
@@ -24,16 +27,59 @@ def to_numpy(t):
     return t.detach().cpu().numpy() if t.requires_grad else t.cpu().numpy()
 
 
+def create_model_for_provider(model_path: str,
+                              provider: str) -> InferenceSession:
+    all_providers = get_all_providers()
+    assert provider in all_providers, f'{provider} not in {all_providers}'
+    so = ort.SessionOptions()
+    so.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+    return InferenceSession(model_path, so, providers=[provider])
+
+
+
+
+def run_onnx_benchmark(model,
+                       data_loader,
+                       batch_size,
+                       samples):
+
+    logger.info('Loading ONNX model')
+    cpu_model = create_model_for_provider(model, "CPUExecutionProvider")
+
+    images = []
+    for batch_index, (image, _) in enumerate(data_loader):
+        if batch_index < samples:
+            image = to_numpy(image)
+            images.append(image)
+        else:
+            break
+
+    logger.info('Taking measurements')
+    measurements = 0
+    for image in images:
+        t_start = time.time()
+        _ = cpu_model.run(None, {'input': image})
+        elapsed_time = time.time() - t_start
+        measurements += elapsed_time * 1e3
+    latency = measurements / samples
+    throughput = 1e3 * batch_size / latency
+    return latency, throughput
+
+
 def run_tensorrt_benchmark(net,
                            onnx_model,
                            data_loader,
                            batch_size,
+                           samples,
                            input_dimensions,
                            suppress=False,
                            fp16=False):
     images = []
-    for image, _ in data_loader:
-        images.append(image)
+    for batch_index, (image, _) in enumerate(data_loader):
+        if batch_index < samples:
+            images.append(image)
+        else:
+            break
 
     lgr = trt.Logger(trt.Logger.INFO)
     net_flag = 1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH)
@@ -81,8 +127,8 @@ def run_tensorrt_benchmark(net,
                 cuda_out.append(cuda_mem)
                 context = engine.create_execution_context()
 
+        logger.info('Taking measurements')
         measurements = 0
-        logger.info('Measuring latency')
 
         for batch_index in range(samples):
 
@@ -109,7 +155,7 @@ def run_tensorrt_benchmark(net,
             cuda.memcpy_dtoh_async(host_out[0], cuda_out[0], stream)
             stream.synchronize()
             elapsed_time = time.time() - t_start
-            measurements += elapsed_time * 1e6
+            measurements += elapsed_time * 1e3
 
             if not suppress:
                 desired = list(map(to_numpy, list(net(images[batch_index]))))
@@ -118,8 +164,9 @@ def run_tensorrt_benchmark(net,
                              desired[i],
                              decimal=3)
 
-        latency = measurements / samples
-        throughput = 1e6 * batch_size / latency
+    latency = measurements / samples
+    throughput = 1e3 * batch_size / latency
+
     return latency, throughput
 
 
@@ -181,6 +228,9 @@ if __name__ == '__main__':
                                   0,
                                   cpu=True,
                                   shuffle=False)
+
+    latency, throughput = 'N/A', 'N/A'
+
     if args.trt:
         net = build_ssd(torch.device('cpu'),
                         ssd_settings,
@@ -192,10 +242,18 @@ if __name__ == '__main__':
                                                      source_path_onnx,
                                                      data_loader,
                                                      args.batch_size,
+                                                     samples,
                                                      input_dimensions,
                                                      suppress=args.suppress,
                                                      fp16=args.fp16)
 
+    if args.onnx:
+        # Checks were already performed in onnx export
+        latency, throughput = run_onnx_benchmark(source_path_onnx,
+                                                 data_loader,
+                                                 args.batch_size,
+                                                 samples)
+
     logger.info('Batch size {0}'.format(args.batch_size))
-    logger.info('Latency: {0:.2f} us'.format(latency))
+    logger.info('Latency: {0:.2f} ms'.format(latency))
     logger.info('Throughput: {0:.2f} eps'.format(throughput))
