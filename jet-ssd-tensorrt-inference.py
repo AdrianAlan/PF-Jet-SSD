@@ -36,6 +36,28 @@ def create_model_for_provider(model_path: str,
     return InferenceSession(model_path, so, providers=[provider])
 
 
+def run_pytorch_benchmark(model,
+                          data_loader,
+                          batch_size,
+                          samples):
+    images = []
+    for batch_index, (image, _) in enumerate(data_loader):
+        if batch_index < samples:
+            imgae = image.cpu()
+            images.append(image)
+        else:
+            break
+
+    logger.info('Taking measurements')
+    measurements = 0
+    for image in images:
+        t_start = time.time()
+        _ = model(image)
+        elapsed_time = time.time() - t_start
+        measurements += elapsed_time * 1e3
+    latency = measurements / samples
+    throughput = 1e3 * batch_size / latency
+    return latency, throughput
 
 
 def run_onnx_benchmark(model,
@@ -186,6 +208,9 @@ if __name__ == '__main__':
     parser.add_argument('--fp16',
                         action='store_true',
                         help='Run network in FP16')
+    parser.add_argument('--onnx',
+                        action='store_true',
+                        help='Run network in ONNX')
     parser.add_argument('--trt',
                         action='store_true',
                         help='Run network in TensorRT')
@@ -253,6 +278,22 @@ if __name__ == '__main__':
                                                  data_loader,
                                                  args.batch_size,
                                                  samples)
+
+    if not args.onnx and not args.trt:
+        torch.set_default_tensor_type('torch.FloatTensor')
+        net = build_ssd(torch.device('cpu'),
+                        ssd_settings,
+                        inference=True,
+                        int8=args.int8,
+                        onnx=True)
+        net.load_weights(source_path_torch)
+        net.eval()
+        net = net.cpu()
+        latency, throughput = run_pytorch_benchmark(net,
+                                                    data_loader,
+                                                    args.batch_size,
+                                                    samples,
+                                                    fp16=args.fp16)
 
     logger.info('Batch size {0}'.format(args.batch_size))
     logger.info('Latency: {0:.2f} ms'.format(latency))
