@@ -151,21 +151,19 @@ def run_tensorrt_benchmark(net,
 
         logger.info('Taking measurements')
         measurements = 0
+        warmup = True
+        for image in images:
 
-        for batch_index in range(samples):
+            np.copyto(host_in[0], image.numpy().ravel())
 
-            if batch_index == samples:
-                break
-
-            np.copyto(host_in[0], images[batch_index].numpy().ravel())
-
-            if batch_index == 0:
+            if warmup:
                 logger.info('GPU warm-up')
                 for _ in range(10):
                     cuda.memcpy_htod_async(cuda_in[0], host_in[0], stream)
                     context.execute_async(batch_size=batch_size,
                                           bindings=bindings,
                                           stream_handle=stream.handle)
+                warmup = False
 
             t_start = time.time()
             cuda.memcpy_htod_async(cuda_in[0], host_in[0], stream)
@@ -180,7 +178,7 @@ def run_tensorrt_benchmark(net,
             measurements += elapsed_time * 1e3
 
             if not suppress:
-                desired = list(map(to_numpy, list(net(images[batch_index]))))
+                desired = list(map(to_numpy, list(net(image))))
                 for i, task in enumerate(['loc', 'cls', 'reg']):
                     is_equal(host_out[i].reshape(desired[i].shape),
                              desired[i],
