@@ -241,7 +241,6 @@ if __name__ == '__main__':
 
     base = '{}/{}'.format(config['output']['model'], args.model)
     source_path_torch = '{}.pth'.format(base)
-    source_path_onnx = '{}.onnx'.format(base)
 
     data_loader = get_data_loader(config['dataset']['validation'][0],
                                   args.batch_size,
@@ -255,6 +254,7 @@ if __name__ == '__main__':
     latency, throughput = 'N/A', 'N/A'
 
     if args.trt:
+        source_path_onnx = '{}.onnx'.format(base)
         net = build_ssd(torch.device('cpu'),
                         ssd_settings,
                         inference=True,
@@ -271,6 +271,10 @@ if __name__ == '__main__':
                                                      fp16=args.fp16)
 
     if args.onnx:
+        if args.fp16:
+            raise NotImplementedError('ONNX FP16 on CPU not supported')
+        else:
+            source_path_onnx = '{}.onnx'.format(base)
         # Checks were already performed in onnx export
         latency, throughput = run_onnx_benchmark(source_path_onnx,
                                                  data_loader,
@@ -284,14 +288,16 @@ if __name__ == '__main__':
                         inference=True,
                         int8=args.int8,
                         onnx=True)
-        net.load_weights(source_path_torch)
-        net.eval()
-        net = net.cpu()
+        if args.fp16:
+            raise NotImplementedError('PyTorch FP16 on CPU not supported')
+        else:
+            net.load_weights(source_path_torch)
+            net.eval()
+            net = net.cpu()
         latency, throughput = run_pytorch_benchmark(net,
                                                     data_loader,
                                                     args.batch_size,
-                                                    samples,
-                                                    fp16=args.fp16)
+                                                    samples)
 
     logger.info('Batch size {0}'.format(args.batch_size))
     logger.info('Latency: {0:.2f} ms'.format(latency))
