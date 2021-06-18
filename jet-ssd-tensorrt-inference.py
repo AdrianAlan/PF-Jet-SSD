@@ -288,7 +288,13 @@ if __name__ == '__main__':
                         inference=True,
                         int8=args.int8,
                         onnx=True)
-        if args.fp16:
+        if args.int8:
+            net.qconfig = torch.quantization.get_default_qat_qconfig('fbgemm')
+            torch.quantization.prepare_qat(net, inplace=True)
+            net.load_weights(source_path_torch)
+            net = net.cpu()
+            torch.quantization.convert(net.eval(), inplace=True)
+        elif args.fp16:
             raise NotImplementedError('PyTorch FP16 on CPU not supported')
         else:
             net.load_weights(source_path_torch)
