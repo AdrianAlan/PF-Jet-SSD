@@ -271,7 +271,9 @@ if __name__ == '__main__':
                                                      fp16=args.fp16)
 
     if args.onnx:
-        if args.fp16:
+        if args.int8:
+            source_path_onnx = '{}-int8.onnx'.format(base)
+        elif args.fp16:
             raise NotImplementedError('ONNX FP16 on CPU not supported')
         else:
             source_path_onnx = '{}.onnx'.format(base)

@@ -8,6 +8,7 @@ import torch.quantization
 import yaml
 
 from numpy.testing import assert_almost_equal as is_equal
+from onnxruntime.quantization import quantize_qat
 from ssd.net import build_ssd
 from utils import *
 
@@ -22,6 +23,10 @@ if __name__ == '__main__':
     parser.add_argument('model',
                         type=str,
                         help='Input model name')
+    parser.add_argument('-b', '--batch_size',
+                        type=int,
+                        help='Test batch size',
+                        default=1)
     parser.add_argument('-c', '--config',
                         action=IsValidFile,
                         type=str,
@@ -52,8 +57,10 @@ if __name__ == '__main__':
 
     ssd_settings['n_classes'] += 1
 
-    source_path = '{}/{}.pth'.format(config['output']['model'], args.model)
-    export_path = '{}/{}.onnx'.format(config['output']['model'], args.model)
+    base = '{}/{}'.format(config['output']['model'], args.model)
+    source_path = '{}.pth'.format(base)
+    export_path = '{}.onnx'.format(base)
+    export_int8_path = '{}-int8.onnx'.format(base)
 
     torch.set_default_tensor_type('torch.FloatTensor')
 
@@ -68,7 +75,7 @@ if __name__ == '__main__':
 
     logger.info('Prepare inputs')
     loader = get_data_loader(dataset,
-                             1,
+                             args.batch_size,
                              num_workers,
                              input_dimensions,
                              jet_size,
@@ -77,7 +84,6 @@ if __name__ == '__main__':
 
     batch_iterator = iter(loader)
     dummy_input, _ = next(batch_iterator)
-    print(net)
     logger.info('Export as ONNX model')
     torch.onnx.export(net,
                       dummy_input,
@@ -93,6 +99,11 @@ if __name__ == '__main__':
     logger.info('Validating graph')
     onnx_model = onnx.load(export_path)
     onnx.checker.check_model(onnx_model)
+
+    logger.info('Export int8 ONNX model')
+    quantize_qat(export_path, export_int8_path)
+    onnx_int8_model = onnx.load(export_int8_path)
+    onnx.checker.check_model(onnx_int8_model)
 
     logger.info('Matching outputs')
     ort_session = onnxruntime.InferenceSession(export_path)
