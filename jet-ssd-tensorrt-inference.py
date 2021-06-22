@@ -23,6 +23,58 @@ warnings.filterwarnings(
 )
 
 
+class ImageBatchStream():
+    def __init__(self, batch_size, data_loader):
+        self.batch = 0
+        self.batch_size = batch_size
+        self.max_batches = 10
+        self.calibration_data = np.zeros((batch_size, 3, 340, 360),
+                                         dtype=np.float32)
+
+    def reset(self):
+        self.batch = 0
+
+    def next_batch(self):
+        if self.batch < self.max_batches:
+            images = []
+            for batch_index, (image, _) in enumerate(data_loader):
+                if batch_index < self.batch_size:
+                    images.append(to_numpy(image))
+                else:
+                    break
+            for i in range(self.batch_size):
+                self.calibration_data[i] = images[i]
+            self.batch += 1
+            return np.ascontiguousarray(self.calibration_data,
+                                        dtype=np.float32)
+        else:
+            return np.array([])
+
+
+class PythonEntropyCalibrator(trt.IInt8EntropyCalibrator2):
+    def __init__(self, loader):
+        trt.IInt8EntropyCalibrator2.__init__(self)
+        self.loader = loader
+        self.loader.reset()
+        self.d_input = cuda.mem_alloc(self.loader.calibration_data.nbytes)
+
+    def get_batch_size(self):
+        return self.loader.batch_size
+
+    def get_batch(self, bindings):
+        batch = self.loader.next_batch()
+        if not batch.size:
+            return None
+        cuda.memcpy_htod(self.d_input, batch)
+        return [int(self.d_input)]
+
+    def read_calibration_cache(self):
+        return None
+
+    def write_calibration_cache(self, size):
+        return None
+
+
 def to_numpy(t):
     return t.detach().cpu().numpy() if t.requires_grad else t.cpu().numpy()
 
@@ -95,7 +147,8 @@ def run_tensorrt_benchmark(net,
                            samples,
                            input_dimensions,
                            suppress=False,
-                           fp16=False):
+                           fp16=False,
+                           int8=False):
     images = []
     for batch_index, (image, _) in enumerate(data_loader):
         if batch_index < samples:
@@ -127,6 +180,12 @@ def run_tensorrt_benchmark(net,
 
         if fp16:
             cfg.set_flag(trt.BuilderFlag.FP16)
+            cfg.set_flag(trt.BuilderFlag.STRICT_TYPES)
+        if int8:
+            batchstream = ImageBatchStream(batch_size, data_loader)
+            int8_calibrator = PythonEntropyCalibrator(batchstream)
+            cfg.int8_calibrator = int8_calibrator
+            cfg.set_flag(trt.BuilderFlag.INT8)
             cfg.set_flag(trt.BuilderFlag.STRICT_TYPES)
 
         logger.info('Building TensorRT engine')
@@ -268,7 +327,8 @@ if __name__ == '__main__':
                                                      samples,
                                                      input_dimensions,
                                                      suppress=args.suppress,
-                                                     fp16=args.fp16)
+                                                     fp16=args.fp16,
+                                                     int8=args.int8)
 
     if args.onnx:
         if args.int8:
