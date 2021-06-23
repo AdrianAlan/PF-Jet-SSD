@@ -327,20 +327,22 @@ class Plotting():
         """Plots errobars as a function of batch size"""
         fig, ax = plt.subplots()
 
-        width = 0.35
+        width = 0.11
         groups = np.arange(len(x))
 
         ax.set_xlabel(xlabel, horizontalalignment='right', x=1.0)
         ax.set_ylabel(ylabel, horizontalalignment='right', y=1.0)
-        ax.bar(groups - width/2, y[0], label=label[0], width=width,
-               color=self.colors[0])
-        ax.bar(groups + width/2, y[1], label=label[1], width=width,
-               color=self.colors[1])
+        ax.bar(groups - 0.36, y[0], label=label[0], width=width)
+        ax.bar(groups - 0.24, y[1], label=label[1], width=width)
+        ax.bar(groups - 0.12, y[2], label=label[2], width=width)
+        ax.bar(groups, y[3], label=label[3], width=width)
+        ax.bar(groups + 0.12, y[4], label=label[4], width=width)
+        ax.bar(groups + 0.24, y[5], label=label[5], width=width)
+        ax.bar(groups + 0.36, y[6], label=label[6], width=width)
         ax.set_xticks(groups)
         ax.set_xticklabels(x)
         ax.set_yscale('log')
-        ax.legend(bbox_to_anchor=(0, 1), loc='lower left')
-
+        ax.legend(bbox_to_anchor=(0, 1), loc='lower left', ncol=2)
         fig.tight_layout()
         fig.savefig('{}/{}'.format(self.save_dir, save_name))
         plt.close(fig)
