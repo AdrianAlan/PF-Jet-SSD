@@ -55,11 +55,12 @@ Prerequisite:
 
 Run training with:
 * `python jet-ssd-train.py <name_fpn> -v` for full precision,
+* `python jet-ssd-train.py <name_int8> -m <path_fpn> -v8` for INT8 precision,
 * `python jet-ssd-train.py <name_twn> -m <path_fpn> -vt` for ternary weights.
 
 Run evaluation with (all plots will be stored in `plots` directory):
 ```
-python jet-ssd-eval.py <name_fpn> <name_twn> -v
+python jet-ssd-eval.py <name_fpn> <name_twn> <name_int8> -v
 ```
 
 Other notebooks:
@@ -69,7 +70,7 @@ Other notebooks:
 ## Inference tests
 
 * Convert model to ONNX with `python jet-ssd-onnx-export.py <name> -v`.
-* Measure Jet SSD inference time on GPUs with `python jet-ssd-tensorrt-inference.py <name> -b <batch_size> -v`.
+* Measure Jet SSD inference time on CPUs GPUs with `python jet-ssd-tensorrt-inference.py <name> -b <batch_size> -v`. Additinal flag `--onnx` for ONNX runtime and `--trt` for TensorRT. Without a flag, the tests will run for PyTorch.
 * To get the final inference plot, change the data in `jet-ssd-inference.py` and run.
 
 ## Plots
