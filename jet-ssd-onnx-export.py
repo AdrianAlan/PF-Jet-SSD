@@ -8,9 +8,42 @@ import torch.quantization
 import yaml
 
 from numpy.testing import assert_almost_equal as is_equal
-from onnxruntime.quantization import quantize_qat
+from onnxruntime.quantization import (
+    CalibrationDataReader,
+    QuantFormat,
+    QuantType,
+    quantize_static)
 from ssd.net import build_ssd
 from utils import *
+
+
+class DataReader(CalibrationDataReader):
+    def __init__(self, batch_size, data_loader, model_path):
+        self.datasize = 10
+        self.data_loader = data_loader
+        self.model_path = model_path
+        self.enum_data = []
+        self.data = np.zeros(
+            (self.datasize, batch_size, 3, 340, 360),
+            dtype=np.float32)
+        self.batch_size = batch_size
+        self.foo()
+
+    def foo(self):
+        for i in range(self.datasize):
+            images = []
+            for batch_index, (image, _) in enumerate(self.data_loader):
+                if batch_index < self.batch_size:
+                    images.append(to_numpy(image))
+                else:
+                    break
+            self.data[i] = np.ascontiguousarray(images, dtype=np.float32)
+        session = onnxruntime.InferenceSession(self.model_path, None)
+        input_name = session.get_inputs()[0].name
+        self.enum_data = iter([{input_name: d} for d in self.data])
+
+    def get_next(self):
+        return next(self.enum_data, None)
 
 
 def to_numpy(t):
@@ -101,7 +134,12 @@ if __name__ == '__main__':
     onnx.checker.check_model(onnx_model)
 
     logger.info('Export int8 ONNX model')
-    quantize_qat(export_path, export_int8_path)
+    dr = DataReader(args.batch_size, loader, export_path)
+    quantize_static(export_path,
+                    export_int8_path,
+                    dr,
+                    quant_format=QuantFormat.QOperator,
+                    weight_type=QuantType.QInt8)
     onnx_int8_model = onnx.load(export_int8_path)
     onnx.checker.check_model(onnx_int8_model)
 
