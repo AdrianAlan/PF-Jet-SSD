@@ -28,8 +28,9 @@ class ImageBatchStream():
         self.batch = 0
         self.batch_size = batch_size
         self.max_batches = 10
-        self.calibration_data = np.zeros((batch_size, 3, 340, 360),
-                                         dtype=np.float32)
+        self.calibration_data = np.zeros(
+            (self.max_batches, batch_size, 3, 340, 360),
+            dtype=np.float32)
 
     def reset(self):
         self.batch = 0
@@ -42,7 +43,7 @@ class ImageBatchStream():
                     images.append(to_numpy(image))
                 else:
                     break
-            for i in range(self.batch_size):
+            for i in range(self.max_batches):
                 self.calibration_data[i] = images[i]
             self.batch += 1
             return np.ascontiguousarray(self.calibration_data,
