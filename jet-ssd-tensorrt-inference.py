@@ -214,7 +214,7 @@ def run_tensorrt_benchmark(net,
         warmup = True
         for image in images:
 
-            np.copyto(host_in[0], image.numpy().ravel())
+            np.copyto(host_in[0], to_numpy(image).ravel())
 
             if warmup:
                 logger.info('GPU warm-up')
@@ -308,14 +308,14 @@ if __name__ == '__main__':
                                   input_dimensions,
                                   jet_size,
                                   0,
-                                  cpu=True,
+                                  cpu=args.trt,
                                   shuffle=False)
 
     latency, throughput = 'N/A', 'N/A'
 
     if args.trt:
         source_path_onnx = '{}.onnx'.format(base)
-        net = build_ssd(torch.device('cpu'),
+        net = build_ssd(0,
                         ssd_settings,
                         inference=True,
                         onnx=True)
