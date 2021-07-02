@@ -70,7 +70,7 @@ Other notebooks:
 ## Inference tests
 
 * Convert model to ONNX with `python jet-ssd-onnx-export.py <name> -v`.
-* Measure Jet SSD inference time on CPUs GPUs with `python jet-ssd-tensorrt-inference.py <name> -b <batch_size> -v`. Additinal flag `--onnx` for ONNX runtime and `--trt` for TensorRT. Without a flag, the tests will run for PyTorch.
+* Measure Jet SSD inference time on CPUs GPUs with `python jet-ssd-benchmark-inference.py <name> -b <batch_size> -v`. Additinal flag `--onnx` for ONNX runtime and `--trt` for TensorRT. Without a flag, the tests will run for PyTorch.
 * To get the final inference plot, change the data in `jet-ssd-inference.py` and run.
 
 ## Plots
