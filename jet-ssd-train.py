@@ -75,7 +75,8 @@ def execute(rank,
                                  return_pt=True)
 
     # Build SSD network
-    ssd_net = build_ssd(rank, ssd_settings, int8=int8).to(rank)
+    ssd_net = build_ssd(rank, ssd_settings, int8=int8)
+    ssd_net = nn.SyncBatchNorm.convert_sync_batchnorm(ssd_net).to(rank)
     if int8:
         ssd_net.qconfig = torch.quantization.get_default_qat_qconfig('fbgemm')
         torch.quantization.prepare_qat(ssd_net, inplace=True)
