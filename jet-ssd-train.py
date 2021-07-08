@@ -62,6 +62,7 @@ def execute(rank,
                                    ssd_settings['input_dimensions'],
                                    ssd_settings['object_size'],
                                    rank,
+                                   flip_prob=0.5,
                                    shuffle=True,
                                    return_pt=True)
 
