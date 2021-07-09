@@ -111,6 +111,11 @@ class CalorimeterJetDataset(torch.utils.data.Dataset):
         image = torch.flip(image, [axis])
         return image, labels
 
+    def normalize(self, tensor):
+        m = torch.mean(tensor)
+        s = torch.std(tensor)
+        return tensor.sub(m).div(s)
+
     def open_hdf5(self):
         self.hdf5_dataset = h5py.File(self.source, 'r')
 
@@ -150,18 +155,17 @@ class CalorimeterJetDataset(torch.utils.data.Dataset):
         idx_phi = torch.cat((idx_eFTrack_Phi,
                              idx_eFPhoton_Phi,
                              idx_eFNHadron_Phi), 1)
-        energy = torch.cat((val_eFTrack_PT,
-                            val_eFPhoton_ET,
-                            val_eFNHadron_ET))
-        scaler = torch.max(energy)
 
         i = torch.cat((idx_channels, idx_eta, idx_phi), 0)
-        v = energy / scaler
+        v = torch.cat((val_eFTrack_PT, val_eFPhoton_ET, val_eFNHadron_ET))
 
+        scaler = torch.max(v)
         pixels = torch.sparse.FloatTensor(i, v, torch.Size([self.channels,
                                                             self.width,
                                                             self.height]))
-        return pixels.to_dense(), scaler
+        pixels = pixels.to_dense()
+        pixels = self.normalize(pixels)
+        return pixels, scaler
 
     def process_baseline(self, base_raw):
         base_reshaped = base_raw.reshape(-1, 5)
