@@ -24,6 +24,9 @@ class MultiBoxLoss(nn.Module):
                  neg_pos=3):
         super(MultiBoxLoss, self).__init__()
 
+        self.beta_loc = 1.0
+        self.beta_cnf = 1.0
+        self.beta_reg = 1.0
         self.rank = rank
         self.priors = priors
         self.n_classes = n_classes
@@ -109,9 +112,9 @@ class MultiBoxLoss(nn.Module):
         regr_t = regr_t[pos_idx].view(-1, 1)
         loss_r = F.l1_loss(regr_p, regr_t, reduction='sum')
 
-        # Final losses
+        # Final normalized losses
         N = num_pos.data.sum().float()
         loss_l /= N
         loss_c /= N
         loss_r /= N
-        return loss_l, loss_c, loss_r
+        return self.beta_loc*loss_l, self.beta_cnf*loss_c, self.beta_reg*loss_r
