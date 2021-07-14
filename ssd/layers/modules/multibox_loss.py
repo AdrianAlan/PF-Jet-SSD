@@ -113,7 +113,7 @@ class MultiBoxLoss(nn.Module):
         pos_idx = pos.unsqueeze(pos.dim()).expand_as(reg_data)
         reg_prediction = reg_data[pos_idx].view(-1, 1)
         reg_truth = reg_truth[pos_idx].view(-1, 1)
-        loss_r = F.l1_loss(reg_prediction, reg_truth, reduction='sum')
+        loss_r = F.smooth_l1_loss(reg_prediction, reg_truth, reduction='sum')
 
         # Final normalized losses
         N = num_pos.data.sum().float()
