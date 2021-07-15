@@ -24,6 +24,7 @@ class MultiBoxLoss(nn.Module):
                  neg_pos=3):
         super(MultiBoxLoss, self).__init__()
 
+        self.alpha = 0.1
         self.beta_loc = 1.0
         self.beta_cnf = 1.0
         self.beta_reg = 1.0
@@ -107,7 +108,11 @@ class MultiBoxLoss(nn.Module):
         cnf_idx = (pos_idx+neg_idx).gt(0)
         trt_idx = (pos+neg).gt(0)
         cnf_prediction = cnf_data[cnf_idx].view(-1, self.n_classes)
-        loss_c = F.binary_cross_entropy(cnf_prediction, cnf_truth[trt_idx], reduction='sum')
+        one_hot = F.one_hot(cnf_truth[trt_idx], 4)
+        smooth_target = one_hot*(1-self.alpha) + self.alpha/4
+        loss_c = F.binary_cross_entropy_with_logits(cnf_prediction,
+                                                    smooth_target,
+                                                    reduction='sum')
 
         # Compute regression loss
         pos_idx = pos.unsqueeze(pos.dim()).expand_as(reg_data)
