@@ -7,13 +7,16 @@ from torch.autograd import Variable
 
 
 class MultiBoxLoss(nn.Module):
-    """SSD Weighted Loss Function
+    """Jet-SSD Loss Function
     This class produces confidence target indices by matching ground truth
-    boxes with priors that have jaccard index > threshold parameter.
+    boxes with priors that have jaccard index grater than threshold parameter.
     Localization targets are produced by adding variance into offsets of ground
     truth boxes and their matched priors. Hard negative mining is added to
     filter the excessive number of negative examples that comes with using
-    a large number of default bounding boxes. https://arxiv.org/pdf/1512.02325
+    a large number of default bounding boxes. The MSE loss is implemented for
+    the regression task.
+    References:
+    https://arxiv.org/pdf/1512.02325
     """
 
     def __init__(self,
@@ -38,13 +41,11 @@ class MultiBoxLoss(nn.Module):
     def forward(self, predictions, targets):
         """Multibox loss calculation
         Args:
-            predictions: a tuple containing loc preds, conf preds, regr_preds
-                         and prior boxes from SSD net.
-                conf shape:   [batch_size, num_priors, n_classes]
-                loc shape:    [batch_size, num_priors, 4]
-                regr shape:   [batch_size, num_priors, 1]
-                priors shape: [num_priors, 4]
-            targets (tensor): ground truth boxes and labels for a batch,
+            predictions: a tuple containing loc preds, cnf preds, reg_preds
+                cnf shape: [batch_size, num_priors, n_classes]
+                loc shape: [batch_size, num_priors, 4]
+                reg shape: [batch_size, num_priors, 1]
+            targets: ground truth boxes and labels for a batch,
                 shape: [batch_size, num_objs, 6].
         Outputs:
             loss_l: localization loss
