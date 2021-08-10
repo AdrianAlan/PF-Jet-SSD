@@ -29,6 +29,7 @@ class SSD(nn.Module):
         self.loc = nn.ModuleList(head[0])
         self.cnf = nn.ModuleList(head[1])
         self.reg = nn.ModuleList(head[2])
+        self.attention1 = AttentionLayer(512, torch.device(rank))
         self.l2norm_1 = L2Norm(512, 20, torch.device(rank))
         self.n_classes = ssd_settings['n_classes']
         self.top_k = ssd_settings['top_k']
@@ -49,6 +50,7 @@ class SSD(nn.Module):
             self.detect = Detect()
         else:
             self.l2norm_2 = L2Norm(1024, 20, torch.device(rank))
+            self.attention2 = AttentionLayer(1024, torch.device(rank))
 
     def forward(self, x):
         if self.int8:
@@ -71,11 +73,13 @@ class SSD(nn.Module):
                     sources.append(x)
                 else:
                     sources.append(self.l2norm_1(x))
+                    sources[0] = self.attention1(sources[0])
             if i == 14:
                 if self.int8:
                     sources.append(x)
                 else:
                     sources.append(self.l2norm_2(x))
+                    sources[1] = self.attention2(sources[1])
 
         # Apply multibox head to source layers
         for (x, l, c, r) in zip(sources, self.loc, self.cnf, self.reg):
