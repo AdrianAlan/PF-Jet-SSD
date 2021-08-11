@@ -13,8 +13,8 @@ class MultiBoxLoss(nn.Module):
     Localization targets are produced by adding variance into offsets of ground
     truth boxes and their matched priors. Hard negative mining is added to
     filter the excessive number of negative examples that comes with using
-    a large number of default bounding boxes. The MSE loss is implemented for
-    the regression task.
+    a large number of default bounding boxes. The Smooth L1 loss is implemented
+    for the regression task.
     References:
     https://arxiv.org/pdf/1512.02325
     """
