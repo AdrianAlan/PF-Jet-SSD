@@ -20,6 +20,7 @@ from tqdm import trange
 from ssd.checkpoints import EarlyStopping
 from ssd.layers.functions import PriorBox
 from ssd.layers.modules import MultiBoxLoss
+from ssd.layers.regularizers import FLOPRegularizer
 from ssd.generator import CalorimeterJetDataset
 from ssd.net import build_ssd
 from ssd.qutils import get_delta, get_alpha, to_ternary
@@ -44,6 +45,7 @@ def execute(rank,
             training_pref,
             ssd_settings,
             trained_model_path,
+            flop_regularizer,
             verbose):
 
     setup(rank, world_size)
@@ -108,6 +110,8 @@ def execute(rank,
     if rank == 0:
         cp_es = EarlyStopping(patience=training_pref['patience'],
                               save_path='%s/%s.pth' % (output['model'], name))
+    if flop_regularizer:
+        regularizer = FLOPRegularizer(ssd_settings['input_dimensions'])
     priors = Variable(PriorBox().apply(
         {'min_dim': ssd_settings['input_dimensions'][1:],
          'feature_maps': ssd_settings['feature_maps'],
@@ -161,15 +165,20 @@ def execute(rank,
                                                    m.weight.delta,
                                                    m.weight.alpha)
 
+            if flop_regularizer:
+                rflop = regularizer.get_regularization(ssd_net.mobilenet)
+            else:
+                rflop = 0.
+
             if int8:
                 outputs = net(images)
                 l, c, r = criterion(outputs, targets)
-                loss = l + c + r
+                loss = l + c + r + rflop
             else:
                 with autocast():
                     outputs = net(images)
                     l, c, r = criterion(outputs, targets)
-                    loss = l + c + r
+                    loss = l + c + r + rflop
 
             loc.update(l)
             cls.update(c)
@@ -307,6 +316,8 @@ if __name__ == '__main__':
                         help='Train int8 network')
     parser.add_argument('-t', '--ternary', action='store_true',
                         help='Ternarize weights')
+    parser.add_argument('-r', '--flop-regularizer', action='store_true',
+                        help='Run with FLOP regularizer')
     parser.add_argument('-v', '--verbose', action='store_true',
                         help='Output verbosity')
     args = parser.parse_args()
@@ -326,6 +337,7 @@ if __name__ == '__main__':
                    config['training_pref'],
                    config['ssd_settings'],
                    args.pre_trained_model_path,
+                   args.flop_regularizer,
                    args.verbose),
              nprocs=world_size,
              join=True)
