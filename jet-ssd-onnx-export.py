@@ -65,6 +65,11 @@ if __name__ == '__main__':
                         type=str,
                         help='Path to config file',
                         default='ssd-config.yml')
+    parser.add_argument('-n', '--structure',
+                        action=IsValidFile,
+                        type=str,
+                        help='Path to config file',
+                        default='net-config.yml')
     parser.add_argument('-s', '--suppress',
                         action='store_true',
                         help='Suppress checks')
@@ -74,6 +79,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     config = yaml.safe_load(open(args.config))
+    net_config = yaml.safe_load(open(args.structure))
 
     logger = set_logging('Test_SSD',
                          '{}/PF-Jet-SSD-Test.log'.format(
@@ -83,6 +89,7 @@ if __name__ == '__main__':
     logger.info('Converting {} model to ONNX'.format(args.model))
 
     ssd_settings = config['ssd_settings']
+    net_channels = net_config['network_channels']
     input_dimensions = ssd_settings['input_dimensions']
     jet_size = ssd_settings['object_size']
     num_workers = config['evaluation_pref']['workers']
@@ -100,6 +107,7 @@ if __name__ == '__main__':
     logger.info('Prepare PyTorch model')
     net = build_ssd(torch.device('cpu'),
                     ssd_settings,
+                    net_channels,
                     inference=True,
                     onnx=True)
 

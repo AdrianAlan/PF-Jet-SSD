@@ -44,6 +44,7 @@ def execute(rank,
             output,
             training_pref,
             ssd_settings,
+            net_channels,
             trained_model_path,
             flop_regularizer,
             verbose):
@@ -78,7 +79,7 @@ def execute(rank,
                                  return_pt=True)
 
     # Build SSD network
-    ssd_net = build_ssd(rank, ssd_settings, int8=int8)
+    ssd_net = build_ssd(rank, ssd_settings, net_channels, int8=int8)
     ssd_net = nn.SyncBatchNorm.convert_sync_batchnorm(ssd_net).to(rank)
     if int8:
         ssd_net.qconfig = torch.quantization.get_default_qat_qconfig('fbgemm')
@@ -309,6 +310,8 @@ if __name__ == '__main__':
     parser.add_argument('name', type=str, help='Model name')
     parser.add_argument('-c', '--config', action=IsValidFile, type=str,
                         help='Path to config file', default='ssd-config.yml')
+    parser.add_argument('-s', '--structure', action=IsValidFile, type=str,
+                        help='Path to config file', default='net-config.yml')
     parser.add_argument('-m', '--pre-trained-model', action=IsValidFile,
                         default=None, dest='pre_trained_model_path', type=str,
                         help='Path to pre-trained model')
@@ -322,6 +325,7 @@ if __name__ == '__main__':
                         help='Output verbosity')
     args = parser.parse_args()
     config = yaml.safe_load(open(args.config))
+    net_config = yaml.safe_load(open(args.structure))
 
     torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
@@ -336,6 +340,7 @@ if __name__ == '__main__':
                    config['output'],
                    config['training_pref'],
                    config['ssd_settings'],
+                   net_config['network_channels'],
                    args.pre_trained_model_path,
                    args.flop_regularizer,
                    args.verbose),

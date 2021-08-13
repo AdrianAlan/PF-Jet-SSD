@@ -16,6 +16,7 @@ class SSD(nn.Module):
                  base,
                  head,
                  ssd_settings,
+                 net_channels,
                  inference=False,
                  int8=False,
                  onnx=False):
@@ -29,8 +30,8 @@ class SSD(nn.Module):
         self.loc = nn.ModuleList(head[0])
         self.cnf = nn.ModuleList(head[1])
         self.reg = nn.ModuleList(head[2])
-        self.attention1 = AttentionLayer(512, torch.device(rank))
-        self.l2norm_1 = L2Norm(512, 20, torch.device(rank))
+        self.attention1 = AttentionLayer(net_channels[-3], torch.device(rank))
+        self.l2norm_1 = L2Norm(net_channels[-3], 20, torch.device(rank))
         self.n_classes = ssd_settings['n_classes']
         self.top_k = ssd_settings['top_k']
         self.min_confidence = ssd_settings['confidence_threshold']
@@ -49,8 +50,9 @@ class SSD(nn.Module):
             self.softmax = nn.Softmax(dim=-1)
             self.detect = Detect()
         else:
-            self.l2norm_2 = L2Norm(1024, 20, torch.device(rank))
-            self.attention2 = AttentionLayer(1024, torch.device(rank))
+            self.l2norm_2 = L2Norm(net_channels[-1], 20, torch.device(rank))
+            self.attention2 = AttentionLayer(net_channels[-1],
+                                             torch.device(rank))
 
     def forward(self, x):
         if self.int8:
@@ -155,34 +157,34 @@ def conv_dw(inp, out, int8):
     )
 
 
-def mobile_net_v1(c, int8, inference):
-    layers = [conv_bn(c, 32, int8),
+def mobile_net_v1(c, net_channels, int8, inference):
+    layers = [conv_bn(c, net_channels[0], int8),
               nn.AvgPool2d(kernel_size=2, stride=2, padding=1),
-              conv_dw(32, 64, int8),
-              conv_dw(64, 128, int8),
-              conv_dw(128, 128, int8),
+              conv_dw(net_channels[0], net_channels[1], int8),
+              conv_dw(net_channels[1], net_channels[2], int8),
+              conv_dw(net_channels[2], net_channels[3], int8),
               nn.AvgPool2d(kernel_size=2, stride=2, padding=1),
-              conv_dw(128, 256, int8),
-              conv_dw(256, 512, int8),
-              conv_dw(512, 512, int8),
+              conv_dw(net_channels[3], net_channels[4], int8),
+              conv_dw(net_channels[4], net_channels[5], int8),
+              conv_dw(net_channels[5], net_channels[6], int8),
               nn.AvgPool2d(kernel_size=2, stride=2, padding=1),
-              conv_dw(512, 512, int8),
-              conv_dw(512, 512, int8),
+              conv_dw(net_channels[6], net_channels[7], int8),
+              conv_dw(net_channels[7], net_channels[8], int8),
               nn.AvgPool2d(kernel_size=2, stride=2, padding=1),
-              conv_dw(512, 1024, int8),
-              conv_dw(1024, 1024, int8)]
+              conv_dw(net_channels[8], net_channels[9], int8),
+              conv_dw(net_channels[9], net_channels[10], int8)]
     if inference:
         return layers[:-3]
     return layers
 
 
-def multibox(n_classes, inference):
+def multibox(n_classes, net_channels, inference):
     loc, cnf, reg = [], [], []
 
     if inference:
-        source_channels = [512]
+        source_channels = [net_channels[-3]]
     else:
-        source_channels = [512, 1024]
+        source_channels = [net_channels[-3], net_channels[-1]]
 
     for c in source_channels:
         loc += [nn.Conv2d(c, 2, kernel_size=3, padding=1, bias=False)]
@@ -192,11 +194,23 @@ def multibox(n_classes, inference):
     return (loc, cnf, reg)
 
 
-def build_ssd(rank, ssd_settings, inference=False, int8=False, onnx=False):
+def build_ssd(rank,
+              ssd_settings,
+              net_channels,
+              inference=False,
+              int8=False,
+              onnx=False):
 
     input_dimensions = ssd_settings['input_dimensions']
 
-    base = mobile_net_v1(input_dimensions[0], int8, inference)
-    head = multibox(ssd_settings['n_classes'], inference)
+    base = mobile_net_v1(input_dimensions[0], net_channels, int8, inference)
+    head = multibox(ssd_settings['n_classes'], net_channels, inference)
 
-    return SSD(rank, base, head, ssd_settings, inference, int8, onnx)
+    return SSD(rank,
+               base,
+               head,
+               ssd_settings,
+               net_channels,
+               inference,
+               int8,
+               onnx)

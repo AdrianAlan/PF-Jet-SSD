@@ -196,14 +196,18 @@ if __name__ == '__main__':
                         help='int8 Network model name')
     parser.add_argument('-c', '--config', action=IsValidFile, type=str,
                         help='Path to config file', default='ssd-config.yml')
+    parser.add_argument('-s', '--structure', action=IsValidFile, type=str,
+                        help='Path to config file', default='net-config.yml')
     parser.add_argument('-v', '--verbose', action='store_true',
                         help='Output verbosity')
     args = parser.parse_args()
     config = yaml.safe_load(open(args.config))
+    net_config = yaml.safe_load(open(args.structure))
 
     dataset = config['dataset']['test'][0]
     evaluation_pref = config['evaluation_pref']
     ssd_settings = config['ssd_settings']
+    net_channels = net_config['network_channels']
     batch_size = evaluation_pref['batch_size']
     jet_names = evaluation_pref['names_classes']
     num_workers = evaluation_pref['workers']
@@ -252,6 +256,7 @@ if __name__ == '__main__':
             torch.set_default_tensor_type('torch.FloatTensor')
             net = build_ssd(torch.device('cpu'),
                             ssd_settings,
+                            net_channels,
                             inference=True,
                             int8=True)
             net.qconfig = torch.quantization.get_default_qat_qconfig('fbgemm')
@@ -261,7 +266,7 @@ if __name__ == '__main__':
             torch.quantization.convert(net.eval(), inplace=True)
         else:
             torch.set_default_tensor_type('torch.cuda.FloatTensor')
-            net = build_ssd(0, ssd_settings, inference=True)
+            net = build_ssd(0, ssd_settings, net_channels, inference=True)
             net.load_weights(path)
             cudnn.benchmark = True
             net = net.cuda()

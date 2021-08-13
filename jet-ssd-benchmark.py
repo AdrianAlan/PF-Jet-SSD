@@ -280,13 +280,20 @@ if __name__ == '__main__':
                         type=str,
                         help='Path to config file',
                         default='ssd-config.yml')
+    parser.add_argument('-s', '--structure',
+                        action=IsValidFile,
+                        type=str,
+                        help='Path to config file',
+                        default='net-config.yml')
     parser.add_argument('-v', '--verbose',
                         action='store_true',
                         help='Output verbosity')
     args = parser.parse_args()
     config = yaml.safe_load(open(args.config))
+    net_config = yaml.safe_load(open(args.structure))
 
     ssd_settings = config['ssd_settings']
+    net_channels = net_config['network_channels']
     ssd_settings['n_classes'] += 1
     input_dimensions = ssd_settings['input_dimensions']
     jet_size = ssd_settings['object_size']
@@ -317,6 +324,7 @@ if __name__ == '__main__':
         source_path_onnx = '{}.onnx'.format(base)
         net = build_ssd(0,
                         ssd_settings,
+                        net_channels,
                         inference=True,
                         onnx=True)
         net.load_weights(source_path_torch)
@@ -348,6 +356,7 @@ if __name__ == '__main__':
         torch.set_default_tensor_type('torch.FloatTensor')
         net = build_ssd(torch.device('cpu'),
                         ssd_settings,
+                        net_channels,
                         inference=True,
                         int8=args.int8,
                         onnx=True)
