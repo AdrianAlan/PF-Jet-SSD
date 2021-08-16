@@ -4,11 +4,11 @@ import torch.nn as nn
 
 class FLOPRegularizer():
 
-    def __init__(self, in_shape, reg_strength=1e-11, threshold=1e-2):
+    def __init__(self, in_shape, device, reg_strength=1e-10):
         self.activation_size = torch.Tensor(in_shape[1:])
         self.channels = in_shape[0]
         self.reg_strength = reg_strength
-        self.threshold = threshold
+        self.device = device
 
     def feature_map_after_pooling(self, A):
         """
@@ -18,37 +18,43 @@ class FLOPRegularizer():
         K, P, S = 2, 1, 2
         return torch.floor_divide((A - K + 2*P), S) + 1
 
-    def flops_per_block(self, in_channels, in_shape, gammas, depthwise=True):
+    def flops_per_block(self,
+                        in_channels,
+                        out_channels,
+                        in_shape,
+                        depthwise=True):
         """
         Calculate FLOPs for the convolutions with activations.
         Assumes folded BatchNorm.
         """
         K, P, S = 3, 1, 1
+        flops = torch.tensor(0.).to(self.device)
 
-        alive = torch.sum(torch.abs(gammas) > self.threshold)
         num_instance_per_filter = ((in_shape[0] - K + 2 * P) / S) + 1
         num_instance_per_filter *= ((in_shape[1] - K + 2 * P) / S) + 1
 
+        d = in_channels * num_instance_per_filter
         if depthwise:
             # [in_C * W * H  * (out_C + K * K)]
-            flops = in_channels * num_instance_per_filter * (alive + K * K)
+            flops += d * (out_channels + K * K)
         else:
             # [in_C * W * H  * (out_C * K * K)]
-            flops = in_channels * num_instance_per_filter * (alive * K * K)
+            flops += d * (out_channels * K * K)
         # Add activations
         flops += in_channels * num_instance_per_filter
-        flops = self.reg_strength*flops*torch.sum(torch.abs(gammas))
-        return flops, alive
+        return flops
 
     def get_regularization(self, net):
-        total_flops, c, in_size = 0, self.channels, self.activation_size
+        reg = torch.tensor(0.).to(self.device)
+        in_channels = self.channels
+        in_size = self.activation_size
 
         for x, child in enumerate(net.children()):
+
             # Take only inference batchnorm parameters
             if x > 11:
                 break
 
-            cflops = 0
             if not self.is_pooling_layer(child):
                 if len(child) == 4:
                     conv_dw = False
@@ -58,12 +64,18 @@ class FLOPRegularizer():
                     conv_dw = True
                     _, gamma = list(child.named_parameters())[-3]
 
-                cflops, c = self.flops_per_block(c, in_size, gamma, conv_dw)
+                out_channels = len(gamma)
+
+                flops = self.flops_per_block(in_channels,
+                                             out_channels,
+                                             in_size,
+                                             conv_dw)
+                reg += flops * torch.sum(torch.abs(gamma)) * self.reg_strength
+                in_channels = len(gamma)
             else:
                 in_size = self.feature_map_after_pooling(in_size)
-            total_flops += cflops
 
-        return total_flops
+        return reg
 
     def is_pooling_layer(self, layer):
         """

@@ -112,7 +112,7 @@ def execute(rank,
         cp_es = EarlyStopping(patience=training_pref['patience'],
                               save_path='%s/%s.pth' % (output['model'], name))
     if flop_regularizer:
-        regularizer = FLOPRegularizer(ssd_settings['input_dimensions'])
+        regularizer = FLOPRegularizer(ssd_settings['input_dimensions'], rank)
     priors = Variable(PriorBox().apply(
         {'min_dim': ssd_settings['input_dimensions'][1:],
          'feature_maps': ssd_settings['feature_maps'],
@@ -256,7 +256,7 @@ def execute(rank,
                            val_loss.cpu().numpy(),
                            name)
 
-            if rank == 0 and cp_es(vloss.sum(0), ssd_net):
+            if rank == 0 and cp_es(vloss.sum(0) + rflop, ssd_net):
                 break
 
             dist.barrier()
