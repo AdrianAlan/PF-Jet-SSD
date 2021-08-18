@@ -101,7 +101,8 @@ def execute(rank,
     net = DDP(ssd_net, device_ids=[rank])
 
     # Set training objective parameters
-    optimizer = optim.SGD(net.parameters(), lr=1e-3,
+    optimizer = optim.SGD(net.parameters(),
+                          lr=training_pref['learning_rate'],
                           momentum=training_pref['momentum'],
                           weight_decay=training_pref['weight_decay'])
     scheduler = optim.lr_scheduler.MultiStepLR(optimizer,

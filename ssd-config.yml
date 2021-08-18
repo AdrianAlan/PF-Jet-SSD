@@ -26,6 +26,7 @@ training_pref:
  batch_size_train: 25
  batch_size_validation: 150
  max_epochs: 100
+ learning_rate: 0.001
  momentum: .9
  patience: 50
  weight_decay: 0.0005
