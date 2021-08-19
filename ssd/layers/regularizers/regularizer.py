@@ -4,10 +4,10 @@ import torch.nn as nn
 
 class FLOPRegularizer():
 
-    def __init__(self, in_shape, device, reg_strength=1e-10):
+    def __init__(self, in_shape, device, strength=1e-10):
         self.activation_size = torch.Tensor(in_shape[1:])
         self.channels = in_shape[0]
-        self.reg_strength = reg_strength
+        self.strength = strength
         self.device = device
 
     def feature_map_after_pooling(self, A):
@@ -70,7 +70,7 @@ class FLOPRegularizer():
                                              out_channels,
                                              in_size,
                                              conv_dw)
-                reg += flops * torch.sum(torch.abs(gamma)) * self.reg_strength
+                reg += flops * torch.sum(torch.abs(gamma)) * self.strength
                 in_channels = len(gamma)
             else:
                 in_size = self.feature_map_after_pooling(in_size)

@@ -113,7 +113,8 @@ def execute(rank,
         cp_es = EarlyStopping(patience=training_pref['patience'],
                               save_path='%s/%s.pth' % (output['model'], name))
     if flop_regularizer:
-        regularizer = FLOPRegularizer(ssd_settings['input_dimensions'], rank)
+        regularizer = FLOPRegularizer(ssd_settings['input_dimensions'], rank,
+                                      strength=training_pref['reg_strength'])
     priors = Variable(PriorBox().apply(
         {'min_dim': ssd_settings['input_dimensions'][1:],
          'feature_maps': ssd_settings['feature_maps'],

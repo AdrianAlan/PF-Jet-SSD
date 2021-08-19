@@ -29,6 +29,7 @@ training_pref:
  learning_rate: 0.001
  momentum: .9
  patience: 50
+ reg_strength: 0.00000000001
  weight_decay: 0.0005
  workers: 0
 
