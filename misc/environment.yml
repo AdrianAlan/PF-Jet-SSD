@@ -26,3 +26,4 @@ dependencies:
     - nvidia-pyindex==1.0.9
     - nvidia-tensorrt==7.2.3.4
     - protobuf==3.17.1
+    - torch_pruning==0.2.7
