@@ -5,7 +5,7 @@ import torch.nn.functional as F
 
 class AttentionLayer(nn.Module):
 
-    def __init__(self, channels, device):
+    def __init__(self, device):
         super(AttentionLayer, self).__init__()
 
         self.avg_pool = nn.AdaptiveAvgPool2d(1)

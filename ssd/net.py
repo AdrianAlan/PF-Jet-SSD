@@ -30,7 +30,7 @@ class SSD(nn.Module):
         self.loc = nn.ModuleList(head[0])
         self.cnf = nn.ModuleList(head[1])
         self.reg = nn.ModuleList(head[2])
-        self.attention1 = AttentionLayer(net_channels[-3], torch.device(rank))
+        self.attention1 = AttentionLayer(torch.device(rank))
         self.l2norm_1 = L2Norm(net_channels[-3], 20, torch.device(rank))
         self.n_classes = ssd_settings['n_classes']
         self.top_k = ssd_settings['top_k']
@@ -51,8 +51,7 @@ class SSD(nn.Module):
             self.detect = Detect()
         else:
             self.l2norm_2 = L2Norm(net_channels[-1], 20, torch.device(rank))
-            self.attention2 = AttentionLayer(net_channels[-1],
-                                             torch.device(rank))
+            self.attention2 = AttentionLayer(torch.device(rank))
 
     def forward(self, x):
         if self.int8:
