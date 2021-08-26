@@ -171,7 +171,7 @@ def execute(rank,
             if flop_regularizer:
                 rflop = regularizer.get_regularization(ssd_net.mobilenet)
             else:
-                rflop = 0.
+                rflop = torch.tensor(0.)
 
             if int8:
                 outputs = net(images)
@@ -258,7 +258,7 @@ def execute(rank,
                            val_loss.cpu().numpy(),
                            name)
 
-            if rank == 0 and cp_es(vloss.sum(0) + rflop, ssd_net):
+            if rank == 0 and cp_es(vloss.sum(0) + rflop.cpu(), ssd_net):
                 break
 
             dist.barrier()
