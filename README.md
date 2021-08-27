@@ -67,6 +67,17 @@ Other notebooks:
 * Verify inference by running the `ssd-inference` notebook,
 * Check ternary filters by running the `show-filters` notebook.
 
+## Pruning
+Prerequisite:
+* Change `ssd-config.yml` `learning_rate` and `max_epochs`.
+
+To run training with regularizer, add `-r` flag:
+* `python jet-ssd-train.py <name_fpn> -rv -s <path_to_net-config> -m <path_to_previous_iteration>`
+
+Uncomment target `max_channels` in `jet-ssd-prune.py` and run:
+* `python jet-ssd-prune.py <name_fpn> -rv -s <path_to_net-config>`
+This will produce a new `net-config.yml` file and overwrite the input model. You may want to make copies of your models before running the pruning procedure.
+
 ## Inference tests
 
 * Convert model to ONNX with `python jet-ssd-onnx-export.py <name> -v`.
