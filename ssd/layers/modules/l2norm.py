@@ -12,6 +12,7 @@ class L2Norm(nn.Module):
         self.n_channels = n_channels
         self.gamma = scale or None
         self.eps = 1e-10
+        self.device = device
         self.weight = nn.Parameter(torch.Tensor(self.n_channels)).to(device)
         self.reset_parameters()
 
@@ -19,6 +20,7 @@ class L2Norm(nn.Module):
         init.constant_(self.weight, self.gamma)
 
     def forward(self, x):
+        x = x.to(self.device)
         norm = x.pow(2).sum(dim=1, keepdim=True).sqrt() + self.eps
         x = torch.div(x, norm)
         x *= self.weight.unsqueeze(0).unsqueeze(2).unsqueeze(3).expand_as(x)
