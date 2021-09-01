@@ -30,8 +30,6 @@ class SSD(nn.Module):
         self.loc = nn.ModuleList(head[0])
         self.cnf = nn.ModuleList(head[1])
         self.reg = nn.ModuleList(head[2])
-        self.attention1 = AttentionLayer(torch.device(rank))
-        self.l2norm_1 = L2Norm(net_channels[-3], 20, torch.device(rank))
         self.n_classes = ssd_settings['n_classes']
         self.top_k = ssd_settings['top_k']
         self.min_confidence = ssd_settings['confidence_threshold']
@@ -40,6 +38,9 @@ class SSD(nn.Module):
         if self.int8:
             self.quant = QuantStub()
             self.dequant = DeQuantStub()
+        else:
+            self.attention1 = AttentionLayer(torch.device(rank))
+            self.l2norm_1 = L2Norm(net_channels[-3], 20, torch.device(rank))
 
         if self.inference:
             self.priors = Variable(PriorBox().apply(
@@ -49,7 +50,7 @@ class SSD(nn.Module):
                  'size': ssd_settings['object_size']}, rank))
             self.softmax = nn.Softmax(dim=-1)
             self.detect = Detect()
-        else:
+        elif not self.int8:
             self.l2norm_2 = L2Norm(net_channels[-1], 20, torch.device(rank))
             self.attention2 = AttentionLayer(torch.device(rank))
 
@@ -73,14 +74,16 @@ class SSD(nn.Module):
                 if self.int8:
                     sources.append(x)
                 else:
-                    sources.append(self.l2norm_1(x))
-                    sources[0] = self.attention1(sources[0])
+                    out = self.l2norm_1(x)
+                    out = self.attention1(x)
+                    sources.append(out)
             if i == 14:
                 if self.int8:
                     sources.append(x)
                 else:
-                    sources.append(self.l2norm_2(x))
-                    sources[1] = self.attention2(sources[1])
+                    out = self.l2norm_2(x)
+                    out = self.attention2(x)
+                    sources.append(out)
 
         # Apply multibox head to source layers
         for (x, l, c, r) in zip(sources, self.loc, self.cnf, self.reg):
