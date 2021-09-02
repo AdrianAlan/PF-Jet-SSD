@@ -39,7 +39,7 @@ class ImageBatchStream():
         if self.batch < self.max_batches:
             images = []
             for batch_index, (image, _) in enumerate(data_loader):
-                if batch_index < self.batch_size:
+                if batch_index < self.max_batches:
                     images.append(to_numpy(image))
                 else:
                     break
@@ -96,7 +96,7 @@ def run_pytorch_benchmark(model,
     images = []
     for batch_index, (image, _) in enumerate(data_loader):
         if batch_index < samples:
-            imgae = image.cpu()
+            image = image.cpu()
             images.append(image)
         else:
             break
@@ -280,7 +280,7 @@ if __name__ == '__main__':
                         type=str,
                         help='Path to config file',
                         default='ssd-config.yml')
-    parser.add_argument('-s', '--structure',
+    parser.add_argument('-n', '--structure',
                         action=IsValidFile,
                         type=str,
                         help='Path to config file',
