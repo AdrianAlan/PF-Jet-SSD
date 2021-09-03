@@ -76,11 +76,15 @@ class Plotting():
         with open('./plots/palette.json') as json_file:
             self.color_palette = json.load(json_file)
         shade = 'shade_700'
-        self.colors = [self.color_palette['red'][shade],
+        self.colors = [self.color_palette['black'],
+                       self.color_palette['red'][shade],
                        self.color_palette['blue'][shade],
                        self.color_palette['yellow'][shade],
                        self.color_palette['green'][shade]]
-        self.line_styles = ['solid', (0, (1, 3)), (0, (5, 5))]
+        self.line_styles = ['solid',
+                            (0, (1, 5)),
+                            (0, (5, 5)),
+                            (0, (3, 5, 1, 5))]
         self.markers = ["o", "v", "s"]
 
     def draw_loss(self,
@@ -117,31 +121,61 @@ class Plotting():
                               jet_names):
         """Plots the precision recall curve"""
 
+        def find_nearest(array, value):
+            if array[1] < (value - .01):
+                return None
+            idx = (np.abs(array - value)).argmin()
+            return idx
+
         fig, ax = plt.subplots()
+        results_ap, results_pr3, results_pr5 = [], [], []
         for i, results in enumerate([results_base,
                                      results_fpn,
                                      results_twn,
                                      results_int8]):
             name = self.legend[i]
+            scores, truths = [], []
+            tmp_ap, tmp_pr3, tmp_pr5 = [], [], []
             for j, jet in enumerate(jet_names):
-                score = results[j][:, 3].numpy()
                 truth = results[j][:, 4].numpy()
+                score = results[j][:, 3].numpy()
+                truths = np.concatenate((truths, truth), axis=None)
+                scores = np.concatenate((scores, score), axis=None)
                 precision, recall, _ = precision_recall_curve(truth, score)
                 ap = average_precision_score(truth, score)
-                label = '{0}: {1} jets, AP: {2:.3f}'.format(name, jet, ap)
-                plt.plot(recall[1:],
-                         precision[1:],
-                         linestyle=self.line_styles[j],
-                         color=self.colors[i],
-                         label=label)
+                tmp_ap.append(ap)
+                x = find_nearest(recall, 0.3)
+                if x is None:
+                    tmp_pr3.append(np.nan)
+                else:
+                    tmp_pr3.append(precision[x])
+                x = find_nearest(recall, 0.5)
+                if x is None:
+                    tmp_pr5.append(np.nan)
+                else:
+                    tmp_pr5.append(precision[x])
+            results_ap.append(tmp_ap)
+            results_pr3.append(tmp_pr3)
+            results_pr5.append(tmp_pr5)
 
-        plt.xlabel('Recall (TPR)', horizontalalignment='right', x=1.0)
-        plt.ylabel('Precision (PPV)', horizontalalignment='right', y=1.0)
+            precision, recall, _ = precision_recall_curve(truths, scores)
+            ap = average_precision_score(truths, scores)
+            label = r'{0}, AP: {1:.3f}'.format(name, ap)
+            plt.plot(recall[1:],
+                     precision[1:],
+                     linestyle=self.line_styles[i],
+                     markersize=0,
+                     color=self.colors[0],
+                     label=label)
+
+        plt.xlabel(r'Recall (TPR)', horizontalalignment='right', x=1.0)
+        plt.ylabel(r'Precision (PPV)', horizontalalignment='right', y=1.0)
         plt.xticks([0.2, 0.4, 0.6, 0.8, 1])
         plt.yticks([0.2, 0.4, 0.6, 0.8, 1])
         ax.legend(loc='upper left', bbox_to_anchor=(1, 1))
         fig.savefig('{}/precision-recall-curve'.format(self.save_dir))
         plt.close(fig)
+        return results_ap, results_pr3, results_pr5
 
     def draw_precision_details(self,
                                results_base,
