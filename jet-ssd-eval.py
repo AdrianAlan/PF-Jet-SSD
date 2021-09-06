@@ -84,7 +84,7 @@ def execute(model,
                         # Angular resolution and regression data
                         deta = np.radians(1)*im_size[0]*delta_eta
                         dphi = np.radians(1)*im_size[1]*delta_phi
-                        dpt = 1 - d[5] / (tp + epsilon)
+                        dpt = d[5] / (tp + epsilon)
                         dts = torch.Tensor([t[4], tp, deta, dphi, dpt])
                         deltas = torch.cat((deltas, dts.unsqueeze(0)))
 
@@ -157,7 +157,7 @@ def execute_baseline(dataset,
                         # Angular resolution and regression data
                         deta = np.radians(1)*im_size[0]*delta_eta
                         dphi = np.radians(1)*im_size[1]*delta_phi
-                        dpt = 1 - b[5] / (tp + epsilon)
+                        dpt = b[5] / (tp + epsilon)
                         dts = torch.Tensor([t[4], tp, deta, dphi, dpt])
                         deltas = torch.cat((deltas, dts.unsqueeze(0)))
 
