@@ -1,48 +1,55 @@
 figure.dpi: 150
-figure.figsize: 8.0, 6.0
+figure.figsize: 3.5, 2.625
 
 savefig.dpi: 200
 savefig.format: png
 savefig.bbox: tight
+savefig.pad_inches: 0.05
 
 image.cmap: viridis
 
-font.family: sans-serif
-font.sans-serif: Liberation Sans
-
 axes.edgecolor: (0.2,0.25,0.29)
 axes.grid: True
-axes.labelsize: 18
-axes.linewidth: 0.8
+axes.labelsize: 9
+axes.linewidth: 0.5
 axes.spines.top: True
 axes.spines.right: True
 axes.spines.left: True
 axes.spines.bottom: True
-axes.titlesize: 14
+axes.titlesize: 9
 
 errorbar.capsize: 0
 
-grid.alpha: 0.3
+grid.alpha: 0.5
 grid.linestyle: --
-grid.linewidth: 0.6
+grid.linewidth: 0.5
 
-legend.fontsize: 14
+legend.fontsize: 9
 legend.frameon: False
-legend.handlelength: 0.7
+legend.handlelength: 1.5
 
-lines.linewidth: 1.0
+lines.linewidth: 1.
+lines.markersize: 2
 
-xtick.color: (0.2,0.25,0.29)
 xtick.direction: in
-xtick.labelsize: 18
-xtick.major.size: 10
-xtick.minor.size: 5
-xtick.top: True
+xtick.major.size: 3
+xtick.major.width: 0.5
+xtick.minor.size: 1.5
+xtick.minor.width: 0.5
 xtick.minor.visible: True
+xtick.top: True
 
-ytick.color: (0.2,0.25,0.29)
 ytick.direction: in
-ytick.labelsize: 18
-ytick.major.size: 10
-ytick.minor.size: 5
-ytick.right: False
+ytick.major.size: 3
+ytick.major.width: 0.5
+ytick.minor.size: 1.5
+ytick.minor.width: 0.5
+ytick.minor.visible: True
+ytick.right: True
+
+# Use serif fonts
+font.family: serif
+font.serif: Computer Modern Roman 
+
+# Use LaTeX for math formatting
+text.usetex: True
