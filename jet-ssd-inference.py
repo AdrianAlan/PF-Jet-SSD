@@ -33,7 +33,7 @@ if __name__ == '__main__':
 
     plot = Plotting(save_dir=config['output']['plots'])
 
-    batch_sizes = ['$2^{}$'.format(i) for i in range(9)]
+    batch_sizes = [r'$2^{}$'.format(i) for i in range(9)]
 
     labels = ['FP32 CPU/PyTorch',
               'INT8 CPU/PyTorch',
