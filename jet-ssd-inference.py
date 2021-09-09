@@ -53,7 +53,7 @@ if __name__ == '__main__':
                         latency_tensorrt_int8],
                        labels,
                        ylabel='Latency [ms]',
-                       save_name='inference-latency')
+                       save_name='Inference-Latency')
 
     plot.draw_barchart(batch_sizes,
                        [throughput_pytorch_fp32,
@@ -65,4 +65,4 @@ if __name__ == '__main__':
                         throughput_tensorrt_int8],
                        labels,
                        ylabel='Throughput [eps]',
-                       save_name='inference-throughput')
+                       save_name='Inference-Throughput')
