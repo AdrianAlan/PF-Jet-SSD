@@ -17,11 +17,13 @@ class SSD(nn.Module):
                  head,
                  ssd_settings,
                  net_channels,
+                 ceva=False,
                  inference=False,
                  int8=False,
                  onnx=False):
         super(SSD, self).__init__()
 
+        self.ceva = ceva
         self.inference = inference
         self.int8 = int8
         self.onnx = onnx
@@ -71,7 +73,7 @@ class SSD(nn.Module):
         for i, layer in enumerate(self.mobilenet):
             x = layer(x)
             if i == 11:
-                if self.int8:
+                if self.int8 or self.ceva:
                     sources.append(x)
                 else:
                     out = self.l2norm_1(x)
@@ -98,7 +100,9 @@ class SSD(nn.Module):
         reg = torch.cat([o.view(o.size(0), -1) for o in reg], 1)
 
         # Apply correct output layer
-        if self.inference and not self.onnx:
+        if self.ceva:
+            output = (l, c, r)
+        elif self.inference and not self.onnx:
             priors = self.priors.type(type(x.data))
             priors = priors.to(torch.device(self.rank))
             output = self.detect.apply(
@@ -199,6 +203,7 @@ def multibox(n_classes, net_channels, inference):
 def build_ssd(rank,
               ssd_settings,
               net_channels,
+              ceva=False,
               inference=False,
               int8=False,
               onnx=False):
@@ -213,6 +218,7 @@ def build_ssd(rank,
                head,
                ssd_settings,
                net_channels,
+               ceva,
                inference,
                int8,
                onnx)
