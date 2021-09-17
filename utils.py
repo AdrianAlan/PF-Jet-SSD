@@ -333,28 +333,48 @@ class Plotting():
             plt.savefig('%s/Delta-%s' % (self.save_dir, jet_name))
             plt.close(fig)
 
-    def draw_barchart(self, x, y, label, ylabel,
+    def draw_barchart(self, x, y1, y2, label, ylabel,
                       xlabel='Batch size [events]',
                       save_name='inference'):
         """Plots errobars as a function of batch size"""
-        fig, ax = plt.subplots()
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(7, 2.625))
 
         width = 0.11
         groups = np.arange(len(x))
 
-        ax.set_xlabel(xlabel, horizontalalignment='right', x=1.0)
-        ax.set_ylabel(ylabel, horizontalalignment='right', y=1.0)
-        ax.bar(groups - 0.36, y[0], label=label[0], width=width)
-        ax.bar(groups - 0.24, y[1], label=label[1], width=width)
-        ax.bar(groups - 0.12, y[2], label=label[2], width=width)
-        ax.bar(groups, y[3], label=label[3], width=width)
-        ax.bar(groups + 0.12, y[4], label=label[4], width=width)
-        ax.bar(groups + 0.24, y[5], label=label[5], width=width)
-        ax.bar(groups + 0.36, y[6], label=label[6], width=width)
-        ax.set_xticks(groups)
-        ax.set_xticklabels(x)
-        ax.set_yscale('log')
-        ax.legend(bbox_to_anchor=(0, 1), loc='lower left', ncol=2, fontsize=7)
+        ax1.set_xlabel(xlabel, horizontalalignment='right', x=1.0)
+        ax1.set_ylabel(ylabel[0], horizontalalignment='right', y=1.0)
+        ax1.bar(groups - 0.36, y1[0], label=label[0], width=width)
+        ax1.bar(groups - 0.24, y1[1], label=label[1], width=width)
+        ax1.bar(groups - 0.12, y1[2], label=label[2], width=width)
+        ax1.bar(groups + 0.00, y1[3], label=label[3], width=width)
+        ax1.bar(groups + 0.12, y1[4], label=label[4], width=width)
+        ax1.bar(groups + 0.24, y1[5], label=label[5], width=width)
+        ax1.bar(groups + 0.36, y1[6], label=label[6], width=width)
+        ax1.set_xticks(groups)
+        ax1.set_xticklabels(x)
+        ax1.set_yscale('log')
+
+        ax2.set_xlabel(xlabel, horizontalalignment='right', x=1.0)
+        ax2.set_ylabel(ylabel[1], horizontalalignment='right', y=1.0)
+        ax2.bar(groups - 0.36, y2[0], label=label[0], width=width)
+        ax2.bar(groups - 0.24, y2[1], label=label[1], width=width)
+        ax2.bar(groups - 0.12, y2[2], label=label[2], width=width)
+        ax2.bar(groups + 0.00, y2[3], label=label[3], width=width)
+        ax2.bar(groups + 0.12, y2[4], label=label[4], width=width)
+        ax2.bar(groups + 0.24, y2[5], label=label[5], width=width)
+        ax2.bar(groups + 0.36, y2[6], label=label[6], width=width)
+        ax2.set_xticks(groups)
+        ax2.set_xticklabels(x)
+        ax2.set_yscale('log')
+
+        handles, labels = ax1.get_legend_handles_labels()
+        fig.legend(handles,
+                   labels,
+                   bbox_to_anchor=(0.1, 1.02),
+                   loc='upper left',
+                   ncol=4,
+                   fontsize=7)
         fig.savefig('{}/{}'.format(self.save_dir, save_name))
         plt.close(fig)
 
