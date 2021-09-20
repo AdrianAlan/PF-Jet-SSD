@@ -14,7 +14,7 @@ from matplotlib.lines import Line2D
 from matplotlib.offsetbox import OffsetImage
 from matplotlib.ticker import FixedLocator as Locator
 import matplotlib.font_manager
-from sklearn.metrics import average_precision_score, precision_recall_curve
+from sklearn.metrics import precision_recall_curve
 from ssd.generator import CalorimeterJetDataset
 from ssd.layers import *
 from torch.utils.data import DataLoader
@@ -88,6 +88,24 @@ class Plotting():
                             (0, (6, 7, 1, 7))]
         self.markers = ["s", "v", "o"]
 
+    def average_precision_score(self, recall, precision):
+
+        def find_nearest(array, value):
+            if array[1] < (value - .01):
+                return None
+            idx = (np.abs(array - value)).argmin()
+            return idx
+
+        recall[0] = 1.
+        precision[0] = 0.
+
+        cum_ap = 0.
+        for i in [x / 10.0 for x in range(0, 11)]:
+            x = find_nearest(recall, i)
+            if x:
+                cum_ap += precision[x]
+        return cum_ap/11.
+
     def draw_loss(self,
                   data_train,
                   data_val,
@@ -143,7 +161,7 @@ class Plotting():
                 truths = np.concatenate((truths, truth), axis=None)
                 scores = np.concatenate((scores, score), axis=None)
                 precision, recall, _ = precision_recall_curve(truth, score)
-                ap = average_precision_score(truth, score)
+                ap = self.average_precision_score(recall, precision)
                 tmp_ap.append(ap)
                 x = find_nearest(recall, 0.3)
                 if x is None:
@@ -160,7 +178,8 @@ class Plotting():
             results_pr5.append(tmp_pr5)
 
             precision, recall, _ = precision_recall_curve(truths, scores)
-            ap = average_precision_score(truths, scores)
+            ap = self.average_precision_score(recall, precision)
+            print(r'{0}, AP: {1:.3f}'.format(name, ap))
             label = r'{0}'.format(name)
             plt.plot(recall[1:],
                      precision[1:],
