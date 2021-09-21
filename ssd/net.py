@@ -77,14 +77,14 @@ class SSD(nn.Module):
                     sources.append(x)
                 else:
                     out = self.l2norm_1(x)
-                    out = self.attention1(x)
+                    out = self.attention1(out)
                     sources.append(out)
             if i == 14:
                 if self.int8:
                     sources.append(x)
                 else:
                     out = self.l2norm_2(x)
-                    out = self.attention2(x)
+                    out = self.attention2(out)
                     sources.append(out)
 
         # Apply multibox head to source layers
