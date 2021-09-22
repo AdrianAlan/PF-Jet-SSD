@@ -86,3 +86,8 @@ This will produce a new `net-config.yml` file and overwrite the input model. You
 
 ## Plots
 All plots will be saved in the `plots` folder unless  otherwise specified in `ssd-config.yml`.
+
+## Pretrained Checkpoints
+* [FPN](https://drive.google.com/file/d/1NjRNcnGsvHzibn_rVdbgj2hL1Sk780oK/view?usp=sharing)
+* [TWN](https://drive.google.com/file/d/1LGF00JaS6JYU4GEBYv88-zg2e4Z2stPp/view?usp=sharing)
+* [INT8](https://drive.google.com/file/d/1K1RjppW_yNAbLXYMxHw4DnM0s3sjMNQp/view?usp=sharing)
