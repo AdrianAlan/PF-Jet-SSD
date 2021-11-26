@@ -1,392 +1,315 @@
 import argparse
+import awkward as ak
 import h5py
 import numpy as np
+import itertools
 import os
-import simplejson as json
-import uproot3 as uproot
-import warnings
+import uproot
+import yaml
 
-from uproot3_methods import TLorentzVectorArray
 from utils import IsReadableDir
 from tqdm import tqdm
+from typing import Dict, Iterable, List, Optional, Tuple
 
 
 class PhysicsConstants():
 
-    def __init__(self, example_file):
+    def __init__(self):
 
-        # Define jet constants
-        self.delta_r = .4
-        self.delphes = uproot.open(example_file)['Delphes']
-        self.min_eta = -3
-        self.max_eta = 3
-        self.min_pt = {'q': 30., 'h': 200., 't': 200., 'W': 200}
-        self.settings = {'t': {'id': 0, 'pid': [6],
-                               'cut_m': [105., 210.]},
-                         'V': {'id': 1, 'pid': [23, 24],
-                               'cut_m': [65., 105.]},
-                         'H': {'id': 2, 'pid': [25],
-                               'cut_m': [105., 140.]}}
+        self.ht_threshold = 500.
 
-    def get_edges_ecal(self, x, sample_events=1000):
+        self.eta_span = (-2.5, 2.5)
+        self.eta_steps = 281
+        self.phi_span = (-np.pi, np.pi)
+        self.phi_steps = 361
+        self.set_edges()
 
-        all_edges = np.array([], dtype=np.float32)
-        edge_arr = self.delphes['EFlowPhoton']['EFlowPhoton.Edges[4]'].array()
+    def set_edges(self):
 
-        for i in range(sample_events):
-            all_edges = np.append(all_edges, edge_arr[i][:, [x, x+1]])
-            all_edges = np.unique(all_edges)
+        self.edges_eta = np.linspace(self.eta_span[0],
+                                     self.eta_span[1],
+                                     self.eta_steps)
+        self.edges_phi = np.linspace(self.phi_span[0],
+                                     self.phi_span[1],
+                                     self.phi_steps)
 
-        if x == 0:
-            all_edges = all_edges[(all_edges > self.min_eta) &
-                                  (all_edges < self.max_eta)]
-
-        return all_edges
+    def get_edges(self) -> Tuple[List[int], List[int]]:
+        return self.edges_eta, self.edges_phi
 
 
 class HDF5Generator:
 
-    def __init__(self, hdf5_dataset_path, hdf5_dataset_size, files_details,
-                 verbose=True):
+    def __init__(self,
+                 hdf5_dataset_path: str,
+                 hdf5_dataset_size: int,
+                 verbose: bool = True):
 
-        self.constants = PhysicsConstants(list(files_details[0])[0])
-        self.edges_eta = self.constants.get_edges_ecal(0)
-        self.edges_phi = self.constants.get_edges_ecal(2)
-
+        self.constants = PhysicsConstants()
+        self.edges_eta, self.edges_phi = self.constants.get_edges()
         self.hdf5_dataset_path = hdf5_dataset_path
         self.hdf5_dataset_size = hdf5_dataset_size
-        self.files_details = files_details
-
         self.verbose = verbose
 
-    def create_hdf5_dataset(self, progress_bar):
+    def create_hdf5_dataset(self, suep: Iterable, qcd: Iterable):
+
+        if self.verbose:
+            progress = tqdm(total=self.hdf5_dataset_size,
+                            desc=('Processing {}'.format(
+                                self.hdf5_dataset_path)))
 
         # Create the HDF5 file.
-        hdf5_dataset = h5py.File(self.hdf5_dataset_path, 'w')
+        with h5py.File(self.hdf5_dataset_path, 'w') as hdf5_dataset:
 
-        hdf5_labels = hdf5_dataset.create_dataset(
+            hdf5_labels = hdf5_dataset.create_dataset(
                 name='labels',
                 shape=(self.hdf5_dataset_size,),
                 maxshape=(None),
                 dtype=h5py.special_dtype(vlen=np.float32))
 
-        hdf5_baseline = hdf5_dataset.create_dataset(
-                name='baseline',
+            hdf5_PFCand_Eta = hdf5_dataset.create_dataset(
+                name='PFCand_Eta',
+                shape=(self.hdf5_dataset_size,),
+                maxshape=(None),
+                dtype=h5py.special_dtype(vlen=np.int16))
+
+            hdf5_PFCand_Phi = hdf5_dataset.create_dataset(
+                name='PFCand_Phi',
+                shape=(self.hdf5_dataset_size,),
+                maxshape=(None),
+                dtype=h5py.special_dtype(vlen=np.int16))
+
+            hdf5_PFCand_PT = hdf5_dataset.create_dataset(
+                name='PFCand_PT',
                 shape=(self.hdf5_dataset_size,),
                 maxshape=(None),
                 dtype=h5py.special_dtype(vlen=np.float32))
 
-        hdf5_EFlowTrack_Eta = hdf5_dataset.create_dataset(
-                name='EFlowTrack_Eta',
-                shape=(self.hdf5_dataset_size,),
-                maxshape=(None),
-                dtype=h5py.special_dtype(vlen=np.int16))
+            get_suep = itertools.cycle([True, False])
+            for i in range(self.hdf5_dataset_size):
 
-        hdf5_EFlowTrack_Phi = hdf5_dataset.create_dataset(
-                name='EFlowTrack_Phi',
-                shape=(self.hdf5_dataset_size,),
-                maxshape=(None),
-                dtype=h5py.special_dtype(vlen=np.int16))
+                if next(get_suep):
+                    event_details = next(suep)
+                else:
+                    event_details = next(qcd)
 
-        hdf5_EFlowTrack_PT = hdf5_dataset.create_dataset(
-                name='EFlowTrack_PT',
-                shape=(self.hdf5_dataset_size,),
-                maxshape=(None),
-                dtype=h5py.special_dtype(vlen=np.float32))
+                pt = event_details.get('pt')
+                eta = event_details.get('eta')
+                phi = event_details.get('phi')
+                mass = event_details.get('mass')
+                flag = event_details.get('flag')
 
-        hdf5_EFlowPhoton_Eta = hdf5_dataset.create_dataset(
-                name='EFlowPhoton_Eta',
-                shape=(self.hdf5_dataset_size,),
-                maxshape=(None),
-                dtype=h5py.special_dtype(vlen=np.int16))
+                jpt = event_details.get('jpt')
+                jeta = event_details.get('jeta')
+                jphi = event_details.get('jphi')
+                jmass = event_details.get('jmass')
 
-        hdf5_EFlowPhoton_Phi = hdf5_dataset.create_dataset(
-                name='EFlowPhoton_Phi',
-                shape=(self.hdf5_dataset_size,),
-                maxshape=(None),
-                dtype=h5py.special_dtype(vlen=np.int16))
+                px_eta, px_phi, values = self.get_energy_map(eta, phi, pt)
 
-        hdf5_EFlowPhoton_ET = hdf5_dataset.create_dataset(
-                name='EFlowPhoton_ET',
-                shape=(self.hdf5_dataset_size,),
-                maxshape=(None),
-                dtype=h5py.special_dtype(vlen=np.float32))
-
-        hdf5_EFlowNeutralHadron_Eta = hdf5_dataset.create_dataset(
-                name='EFlowNeutralHadron_Eta',
-                shape=(self.hdf5_dataset_size,),
-                maxshape=(None),
-                dtype=h5py.special_dtype(vlen=np.int16))
-
-        hdf5_EFlowNeutralHadron_Phi = hdf5_dataset.create_dataset(
-                name='EFlowNeutralHadron_Phi',
-                shape=(self.hdf5_dataset_size,),
-                maxshape=(None),
-                dtype=h5py.special_dtype(vlen=np.int16))
-
-        hdf5_EFlowNeutralHadron_ET = hdf5_dataset.create_dataset(
-                name='EFlowNeutralHadron_ET',
-                shape=(self.hdf5_dataset_size,),
-                maxshape=(None),
-                dtype=h5py.special_dtype(vlen=np.float32))
-
-        i = 0
-
-        for file_details in self.files_details:
-            file_path = next(iter(file_details.keys()))
-
-            events = file_details[file_path]
-
-            file = uproot.open(file_path)
-
-            eFlowTrack = file['Delphes']['EFlowTrack']
-            eFlowPhoton = file['Delphes']['EFlowPhoton']
-            eFlowNH = file['Delphes']['EFlowNeutralHadron']
-
-            eFlowTrack_Eta_full = eFlowTrack['EFlowTrack.Eta'].array()
-            eFlowTrack_Phi_full = eFlowTrack['EFlowTrack.Phi'].array()
-            eFlowTrack_PT_full = eFlowTrack['EFlowTrack.PT'].array()
-
-            eFlowPhoton_Eta_full = eFlowPhoton['EFlowPhoton.Eta'].array()
-            eFlowPhoton_Phi_full = eFlowPhoton['EFlowPhoton.Phi'].array()
-            eFlowPhoton_ET_full = eFlowPhoton['EFlowPhoton.ET'].array()
-
-            eFlowNH_Eta_full = eFlowNH['EFlowNeutralHadron.Eta'].array()
-            eFlowNH_Phi_full = eFlowNH['EFlowNeutralHadron.Phi'].array()
-            eFlowNH_ET_full = eFlowNH['EFlowNeutralHadron.ET'].array()
-
-            particle = file['Delphes']['Particle']
-            particle_Status_full = particle['Particle.Status'].array()
-            particle_PID_full = particle['Particle.PID'].array()
-            particle_Eta_full = particle['Particle.Eta'].array()
-            particle_Phi_full = particle['Particle.Phi'].array()
-            particle_PT_full = particle['Particle.PT'].array()
-
-            jet = file['Delphes']['JetPUPPIAK8']
-            jet_SoftDroppedJet_full = jet['JetPUPPIAK8.SoftDroppedJet'].array()
-            jet_Taus_full = jet['JetPUPPIAK8.Tau[5]'].array()
-            jet_Etas_full = jet['JetPUPPIAK8.Eta'].array()
-            jet_Phis_full = jet['JetPUPPIAK8.Phi'].array()
-            jet_PT_full = jet['JetPUPPIAK8.PT'].array()
-
-            for event_number in np.arange(events[0], events[1], dtype=int):
+                # Get SUEP labels
+                suep_label = self.get_suep_label(eta, phi, pt, mass, flag)
 
                 # Get jet labels
-                particle_Status = particle_Status_full[event_number]
-                particle_PID = particle_PID_full[event_number]
-                particle_Eta = particle_Eta_full[event_number]
-                particle_Phi = particle_Phi_full[event_number]
-                particle_PT = particle_PT_full[event_number]
+                labels = self.get_jet_labels(jeta,
+                                             jphi,
+                                             jpt,
+                                             jmass,
+                                             suep_label)
 
-                labels = self.get_labels(['t', 'H', 'V'],
-                                         particle_Status,
-                                         particle_PID,
-                                         particle_Eta,
-                                         particle_Phi,
-                                         particle_PT)
+                # Concatenate labels
+                if suep_label:
+                    labels.append(suep_label)
 
                 # Flatten the labels array and write it to the dataset
-                hdf5_labels[i] = labels.reshape(-1)
+                hdf5_labels[i] = np.hstack(labels)
 
-                # Get baseline
-                jet_SDJ = jet_SoftDroppedJet_full[event_number]
-                jet_Tau = jet_Taus_full[event_number]
-                jet_Eta = jet_Etas_full[event_number]
-                jet_Phi = jet_Phis_full[event_number]
-                jet_PT = jet_PT_full[event_number]
-
-                baseline = self.get_baseline(['t', 'H', 'V'],
-                                             jet_SDJ,
-                                             jet_Tau,
-                                             jet_Eta,
-                                             jet_Phi,
-                                             jet_PT)
-
-                # Flatten the baseline array and write it to the dataset
-                hdf5_baseline[i] = baseline.reshape(-1)
-
-                # Get EFlowTrack
-                e = eFlowTrack_Eta_full[event_number]
-                p = eFlowTrack_Phi_full[event_number]
-                v = eFlowTrack_PT_full[event_number]
-                mask = ((e > self.edges_eta[0]) & (e < self.edges_eta[-1]))
-                e, p, v = e[mask], p[mask], v[mask]
-                e, p, v = self.get_energy_map(e, p, v)
-                hdf5_EFlowTrack_Eta[i] = e
-                hdf5_EFlowTrack_Phi[i] = p
-                hdf5_EFlowTrack_PT[i] = v
-
-                # Get EFlowPhoton
-                e = eFlowPhoton_Eta_full[event_number]
-                p = eFlowPhoton_Phi_full[event_number]
-                v = eFlowPhoton_ET_full[event_number]
-                mask = ((e > self.edges_eta[0]) & (e < self.edges_eta[-1]))
-                e, p, v = e[mask], p[mask], v[mask]
-                e, p, v = self.get_energy_map(e, p, v)
-                hdf5_EFlowPhoton_Eta[i] = e
-                hdf5_EFlowPhoton_Phi[i] = p
-                hdf5_EFlowPhoton_ET[i] = v
-
-                # Get EFlowNeutralHadron
-                e = eFlowNH_Eta_full[event_number]
-                p = eFlowNH_Phi_full[event_number]
-                v = eFlowNH_ET_full[event_number]
-                mask = ((e > self.edges_eta[0]) & (e < self.edges_eta[-1]))
-                e, p, v = e[mask], p[mask], v[mask]
-                e, p, v = self.get_energy_map(e, p, v)
-                hdf5_EFlowNeutralHadron_Eta[i] = e
-                hdf5_EFlowNeutralHadron_Phi[i] = p
-                hdf5_EFlowNeutralHadron_ET[i] = v
-
-                i += 1
+                hdf5_PFCand_Eta[i] = px_eta
+                hdf5_PFCand_Phi[i] = px_phi
+                hdf5_PFCand_PT[i] = values
 
                 if self.verbose:
-                    progress_bar.update(1)
+                    progress.update(1)
+        if self.verbose:
+            progress.close()
 
-        hdf5_dataset.close()
-
-    def get_baseline(self, check_labels, j, taus, etas, phis, pts):
-        baselines = np.empty((0, 5))
-        m = TLorentzVectorArray.from_cartesian(j.fX, j.fY, j.fZ, j.fE).mass
-        m = np.nan_to_num(m)
-        taus = np.nan_to_num(taus)
-        taus = np.where(taus == 0, 10**-6, taus)
-        tau21 = taus[:, 1] / taus[:, 0]
-        tau32 = taus[:, 2] / taus[:, 1]
-        for label in check_labels:
-            jid = self.constants.settings[label]['id']
-            cuts_m = self.constants.settings[label]['cut_m']
-            mask = (m > cuts_m[0]) & (m < cuts_m[1])
-            scores = tau32 if label == 't' else tau21
-            for e, p, pt, s in zip(etas[mask],
-                                   phis[mask],
-                                   pts[mask],
-                                   scores[mask]):
-                if e < self.edges_eta[0] or e > self.edges_eta[-1]:
-                    continue
-                e = np.argmax(self.edges_eta >= e) - 1
-                p = np.argmax(self.edges_phi >= p) - 1
-                baselines = np.vstack((baselines, [jid, e, p, pt, s]))
-        return baselines
-
-    def get_labels(self, check_labels, status, pids, etas, phis, pts):
-        labels = np.empty((0, 4))
-        pids = np.abs(pids)
-        for label in check_labels:
-            jid = self.constants.settings[label]['id']
-            pid = self.constants.settings[label]['pid']
-            for s, e, p, pt in zip(status[np.isin(pids, pid)],
-                                   etas[np.isin(pids, pid)],
-                                   phis[np.isin(pids, pid)],
-                                   pts[np.isin(pids, pid)]):
-                if s != 22 or e < self.edges_eta[0] or e > self.edges_eta[-1]:
-                    continue
-                e = np.argmax(self.edges_eta >= e) - 1
-                p = np.argmax(self.edges_phi >= p) - 1
-                labels = np.vstack((labels, [jid, e, p, pt]))
-        return labels
-
-    def get_energy_map(self, etas, phis, values):
-        h, _, _ = np.histogram2d(etas,
-                                 phis,
-                                 bins=[self.edges_eta,
-                                       self.edges_phi],
-                                 weights=values)
-        bins = np.argwhere(h)
+    def get_energy_map(self,
+                       etas: np.ndarray,
+                       phis: np.ndarray,
+                       values: np.ndarray) -> Tuple[np.ndarray,
+                                                    np.ndarray,
+                                                    np.ndarray]:
+        """Translate eta/phi to pixel coordinates"""
+        img, _, _ = np.histogram2d(etas,
+                                   phis,
+                                   bins=[self.edges_eta, self.edges_phi],
+                                   weights=values)
+        bins = np.argwhere(img)
         indices_eta = bins[:, 0]
         indices_phi = bins[:, 1]
-        values = h[indices_eta, indices_phi]
+        values = img[indices_eta, indices_phi]
         return indices_eta, indices_phi, values
 
+    def get_jet_labels(self,
+                       etas: np.ndarray,
+                       phis: np.ndarray,
+                       pts: np.ndarray,
+                       mass: np.ndarray,
+                       label: Optional[list]) -> list:
+        """Returns labels for jets"""
+        coordinates = []
+        for e, p, pt, m in zip(etas, phis, pts, mass):
+            x = np.argmax(self.edges_eta >= e)
+            y = np.argmax(self.edges_phi >= p)
+            if label and \
+               x > label[0] and \
+               x < label[2] and \
+               y > label[1] and \
+               y < label[3]:
+                continue
+            coordinates.append([2, x, y, pt, m])
+        return coordinates
 
-class Utils():
+    def get_suep_label(self,
+                       etas: np.ndarray,
+                       phis: np.ndarray,
+                       pts: np.ndarray,
+                       mass: np.ndarray,
+                       flags: np.ndarray) -> Optional[list]:
+        """Returns labels for suep"""
+        pt = sum(pts[flags])
+        if pt == 0:
+            return None
 
-    def parse_config(self, folder, nofiles, config_path):
+        m = sum(mass[flags])
+        e = etas[flags]
+        p = phis[flags]
 
-        # Laod configuration
-        with open(config_path, 'r') as f:
-            config = json.loads(f.read())
+        p_alt = [i+np.pi if i < 0 else i-np.pi for i in p]
 
-        # Total number of events
-        total = config[folder]['events']
-        files_list = list(config[folder]['files'])
-        files_details, files_batch = [], []
-        gtotal, fid, event_min_next = 0, 0, 0
-        batch_id = 1
-        batch_size = total / float(nofiles)
-        jtype = folder.split('/')[-1]
+        xmin = np.argmax(self.edges_eta >= min(e))
+        xmax = np.argmax(self.edges_eta >= max(e))
+        cx = (xmin + xmax) / 2
 
-        while gtotal < total:
+        ymin1 = np.argmax(self.edges_phi >= min(p))
+        ymax1 = np.argmax(self.edges_phi >= max(p))
 
-            file = files_list[fid]
+        ymin2 = np.argmax(self.edges_phi >= min(p_alt))
+        ymax2 = np.argmax(self.edges_phi >= max(p_alt))
 
-            # Set FROM and TO indexes
-            event_min = event_min_next
-            event_max = config[folder]['files'][file]
+        if abs(ymax2-ymin2) < abs(ymax1-ymin1):
+            if abs(ymin2-180) < abs(ymax2-180):
+                return [1, cx, (ymin2+ymax2-360)/2, pt, m]
+            return [1, cx, (ymin2+ymax2+360)/2, pt, m]
+        return [1, cx, (ymin1 + ymax1) / 2, pt, m]
 
-            # Fix nominal target of events
-            gtotal_target = gtotal + event_max - event_min
 
-            # Save filenames with indexes
-            # Fraction of the file
-            if batch_id*batch_size <= gtotal_target:
-                max_in_this_batch = int(batch_id*batch_size)
-                event_max = event_max - (gtotal_target - max_in_this_batch)
-                event_min_next = event_max
+class EventGenerator():
 
-                # Prevent saving files with no events
-                if event_max != event_min:
-                    files_batch.append({file: (event_min, event_max)})
+    def __init__(self, path: str):
+        self.constants = PhysicsConstants()
+        self.path = path
+        self.root_files = self.get_files_from_dir(path)
 
-                # Push to file details
-                files_details.append(files_batch)
-                files_batch = []
-                batch_id = batch_id + 1
-            # Otherwise: full file
-            else:
-                files_batch.append({file: (event_min, event_max)})
-                event_min_next = 0
-                fid += 1
+    def __iter__(self):
 
-            gtotal = gtotal + event_max - event_min
+        for root_file in self.root_files:
 
-        return files_details, batch_size, gtotal, jtype
+            rf = uproot.open('{}{}'.format(self.path, root_file))
+            if not len(rf.keys()):
+                continue
+            tree = rf['mmtree/tree']
+
+            hts = tree['ht'].array()
+            pts = tree['PFcand_pt'].array()
+            mass = tree['PFcand_m'].array()
+            phis = tree['PFcand_phi'].array()
+            etas = tree['PFcand_eta'].array()
+            is_suep = tree['PFcand_fromsuep'].array()
+            n_jet = tree['n_fatjet'].array()
+            jet_pts = tree['FatJet_pt'].array()
+            jet_mass = tree['FatJet_mass'].array()
+            jet_etas = tree['FatJet_eta'].array()
+            jet_phis = tree['FatJet_phi'].array()
+
+            for i, ht in enumerate(hts):
+
+                if ht < self.constants.ht_threshold or n_jet[i] < 2:
+                    continue
+
+                yield {'pt': np.array(pts[i]),
+                       'eta': np.array(etas[i]),
+                       'phi': np.array(phis[i]),
+                       'mass': np.array(mass[i]),
+                       'flag': np.array(is_suep[i]),
+                       'jpt': np.array(jet_pts[i]),
+                       'jeta': np.array(jet_etas[i]),
+                       'jphi': np.array(jet_phis[i]),
+                       'jmass': np.array(jet_mass[i])}
+
+    def get_files_from_dir(self, path: str) -> List[str]:
+        return [i for i in os.listdir(path) if i.endswith(".root")]
+
+
+def parse_config_for_dataset_sizes(config: str) -> List[int]:
+    c = yaml.safe_load(open(config))
+    return c['dataset']['size']
+
+
+def main(path_suep: str,
+         path_qcd: str,
+         path_target: str,
+         config: str,
+         verbose: bool = True):
+
+    dataset_sizes = parse_config_for_dataset_sizes(config)
+
+    eg_suep = iter(EventGenerator(path_suep))
+    eg_qcd = iter(EventGenerator(path_qcd))
+
+    for i, dataset_size in enumerate(dataset_sizes):
+
+        generator = HDF5Generator(
+            hdf5_dataset_path='{}/SUEPPhysicsSSD_{}.h5'.format(path_target, i),
+            hdf5_dataset_size=dataset_size,
+            verbose=verbose)
+
+        generator.create_hdf5_dataset(eg_suep, eg_qcd)
 
 
 if __name__ == '__main__':
 
-    parser = argparse.ArgumentParser('Convert root file data to h5')
-    parser.add_argument('src_folder', type=str, help='Folder to convert')
-    parser.add_argument('-n', '--number-of-files', type=int, default=10,
-                        help='Target number of output files', dest='nfiles')
-    parser.add_argument('-o', '--save-path', type=str, action=IsReadableDir,
-                        default='.', help='Output directory', dest='save_dir')
-    parser.add_argument('-c', '--config', type=str, action=IsReadableDir,
-                        default='./data/file-configuration.json',
-                        help='Configuration file path', dest='config')
-    parser.add_argument('-v', '--verbose', action="store_true",
-                        help='Output verbosity')
+    parser = argparse.ArgumentParser(
+        'Process SUEP and QCD ROOT files and store events and labels in to H5')
+
+    parser.add_argument('source_dir_suep',
+                        action=IsReadableDir,
+                        help='SUEP files source folder',
+                        type=str)
+
+    parser.add_argument('source_dir_qcd',
+                        action=IsReadableDir,
+                        help='QCD files source folder',
+                        type=str)
+
+    parser.add_argument('target_dir',
+                        action=IsReadableDir,
+                        help='H5 files target folder',
+                        type=str)
+
+    parser.add_argument('-c', '--config',
+                        action=IsReadableDir,
+                        default='./ssd-config.yml',
+                        dest='config',
+                        help='Configuration file path',
+                        type=str)
+
+    parser.add_argument('-v', '--verbose',
+                        action="store_true",
+                        help='Speak')
+
     args = parser.parse_args()
 
-    utils = Utils()
-
-    files_details, batch_size, total_events, jtype = utils.parse_config(
-        args.src_folder, args.nfiles, args.config)
-
-    pb = None
-    if args.verbose:
-        pb = tqdm(total=total_events, desc=('Processing %s' % jtype))
-
-    for index, file_dict in enumerate(files_details):
-
-        dataset_size = int((index+1)*batch_size)-int((index)*batch_size)
-        generator = HDF5Generator(
-                hdf5_dataset_path='{0}/{1}_{2}.h5'.format(
-                        args.save_dir, jtype, index),
-                hdf5_dataset_size=dataset_size,
-                files_details=file_dict,
-                verbose=args.verbose)
-        generator.create_hdf5_dataset(pb)
-
-    if args.verbose:
-        pb.close()
+    main(args.source_dir_suep,
+         args.source_dir_qcd,
+         args.target_dir,
+         args.config,
+         args.verbose)

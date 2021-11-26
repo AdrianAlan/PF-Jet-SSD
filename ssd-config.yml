@@ -10,13 +10,17 @@ dataset:
   - /path/to/validation2
  test:
   - /path/to/test
-
-dataset_misc:
- src_folder: /path/to/source/folder
  size:
   - 30000
-  - 12000
-  - 90000
+  - 30000
+  - 30000
+  - 10000
+  - 10000
+  - 10000
+  - 100000
+  - 100
+  - 100
+  - 100
 
 output:
  model: ./models
